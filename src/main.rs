@@ -54,6 +54,19 @@ fn execute(command: &str, args: &[&str])
     }
 }
 
+fn change_directory(path: &str)
+{
+    // if it is absolute path, check if the directory is exist
+    if path.starts_with('/')
+    {
+        if let Err(_) = env::set_current_dir(path)
+        {
+            eprintln!("{}: no such file or directory", path);
+        }
+    }
+}
+
+
 fn main()
 {
     loop
@@ -100,13 +113,20 @@ fn main()
                     eprintln!("Failed to get current directory");
                 }
             }
+            Some("cd") =>
+            {
+                if let Some(arg) = parts.next()
+                {
+                    change_directory(arg);
+                }
+            }
             Some("type") =>
             {
                 if let Some(arg) = parts.next()
                 {
                     match arg
                     {
-                        "echo" | "exit" | "type" | "pwd" => println!("{} is a shell builtin", arg),
+                        "echo" | "exit" | "type" | "pwd" | "cd" => println!("{} is a shell builtin", arg),
                         _ =>
                         {
                           if let Some(path) = find_executable_in_path(arg)
