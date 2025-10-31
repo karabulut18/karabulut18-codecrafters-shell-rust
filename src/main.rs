@@ -43,7 +43,7 @@ fn main()
                     match arg
                     {
                         "echo" | "exit" | "type" => println!("{} is a shell builtin", arg),
-                        _ => println!("{} is not a shell builtin", arg),
+                        _ => println!("{}: not found", arg),
                     }
                 }
             }
