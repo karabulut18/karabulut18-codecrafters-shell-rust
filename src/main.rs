@@ -61,7 +61,7 @@ fn change_directory(path: &str)
     {
         if let Err(_) = env::set_current_dir(path)
         {
-            eprintln!("{}: no such file or directory", path);
+            eprintln!("cd {}: No such file or directory", path);
         }
     }
 }
