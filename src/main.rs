@@ -1,6 +1,7 @@
 use std::io::{self, Write};
 use std::env;
 use std::path::PathBuf;
+use std::os::unix::fs::PermissionsExt;
 
 
 fn find_executable_in_path(name: &str) -> Option<PathBuf>
