@@ -57,12 +57,9 @@ fn execute(command: &str, args: &[&str])
 fn change_directory(path: &str)
 {
     // if it is absolute path, check if the directory is exist
-    if path.starts_with('/')
+    if let Err(_) = env::set_current_dir(path)
     {
-        if let Err(_) = env::set_current_dir(path)
-        {
-            eprintln!("cd: {}: No such file or directory", path);
-        }
+        eprintln!("cd: {}: No such file or directory", path);
     }
 }
 
