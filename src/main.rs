@@ -1,4 +1,23 @@
 use std::io::{self, Write};
+use std::env;
+use std::path::PathBuf;
+
+
+fn find_executable_in_path(name: &str) -> Option<PathBuf>
+{
+    if let Ok(path_var) = env::var("PATH")
+    {
+        for path in env::split_paths(&path_var)
+        {
+            let full_path = path.join(name);
+            if full_path.exists() && full_path.is_file()
+            {
+                return Some(full_path);
+            }
+        }
+    }
+    None
+}
 
 
 fn main()
@@ -43,7 +62,17 @@ fn main()
                     match arg
                     {
                         "echo" | "exit" | "type" => println!("{} is a shell builtin", arg),
-                        _ => println!("{}: not found", arg),
+                        _ =>
+                        {
+                          if let Some(path) = find_executable_in_path(arg)
+                          {
+                            println!("{} is {}", arg, path.display());
+                          }
+                          else
+                          {
+                            println!("{}: not found", arg);
+                          }
+                        }
                     }
                 }
             }
