@@ -2,17 +2,33 @@ use std::io::{self, Write};
 use std::env;
 use std::path::PathBuf;
 
-fn find_executable_in_path(name: &str) -> Option<PathBuf> {
+
+fn find_executable_in_path(name: &str) -> Option<PathBuf>
+{
+    // Improvement: Use `ok().and_then()` for more idiomatic Option/Result handling
     env::var("PATH").ok().and_then(|path_var| {
-        for path in env::split_paths(&path_var) {
+        for path in env::split_paths(&path_var)
+        {
             let full_path = path.join(name);
-            if full_path.is_file() {
-                return Some(full_path);
+            
+            // 1. Check if the path points to a file
+            if full_path.is_file()
+            {
+                // 2. Check if we have execute permission
+                if let Ok(metadata) = full_path.metadata() {
+                    // This checks if the executable bit is set for the current user.
+                    // The standard mode constant for execute permission for the owner is 0o100.
+                    // This is a simple, common way to check for execution permission.
+                    if metadata.permissions().mode() & 0o111 != 0 {
+                        return Some(full_path);
+                    }
+                }
             }
         }
         None
     })
 }
+
 
 
 fn main()
