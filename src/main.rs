@@ -31,6 +31,14 @@ fn main()
                     std::process::exit(0);
                 }
             }
+            Some("echo") =>
+            {
+                for arg in parts
+                {
+                    print!("{} ", arg);
+                }
+                println!();
+            }
             Some(cmd) =>
             {
                 println!("{}: command not found", cmd.trim());
