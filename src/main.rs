@@ -89,6 +89,17 @@ fn main()
                 let output = parts.collect::<Vec<&str>>().join(" ");
                 println!("{}", output);
             }
+            Some("pwd") =>
+            {
+                if let Ok(current_dir) = env::current_dir()
+                {
+                    println!("{}", current_dir.display());
+                }
+                else
+                {
+                    eprintln!("Failed to get current directory");
+                }
+            }
             Some("type") =>
             {
                 if let Some(arg) = parts.next()
