@@ -33,20 +33,25 @@ fn main()
             }
             Some("echo") =>
             {
-                for arg in parts
+                let output = parts.collect::<Vec<&str>>().join(" ");
+                println!("{}", output);
+            }
+            Some("type") =>
+            {
+                if let Some(arg) = parts.next()
                 {
-                    print!("{} ", arg);
+                    match arg
+                    {
+                        "echo" | "exit" | "type" => println!("{} is a shell builtin", arg),
+                        _ => println!("{} is not a shell builtin", arg),
+                    }
                 }
-                println!();
             }
             Some(cmd) =>
             {
-                println!("{}: command not found", cmd.trim());
+                println!("{}: command not found", cmd);
             }
-            None =>
-            {
-                continue;
-            }
+            None =>{}
         }
     }
 }
