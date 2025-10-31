@@ -57,7 +57,17 @@ fn execute(command: &str, args: &[&str])
 fn change_directory(path: &str)
 {
     // if it is absolute path, check if the directory is exist
-    if let Err(_) = env::set_current_dir(path)
+    if path == "~"
+    {
+        if let Ok(home_dir) = env::var("HOME")
+        {
+            if let Err(_) = env::set_current_dir(&home_dir)
+            {
+                eprintln!("cd: HOME not set");
+            }
+        }
+    }
+    else if let Err(_) = env::set_current_dir(path)
     {
         eprintln!("cd: {}: No such file or directory", path);
     }
@@ -114,22 +124,7 @@ fn main()
             {
                 if let Some(arg) = parts.next()
                 {
-                    let target = parts.next().unwrap_or("~");
-                    if target == "~"
-                    {
-                        if let Ok(home_dir) = env::var("HOME")
-                        {
-                            change_directory(&home_dir);
-                        }
-                        else
-                        {
-                            eprintln!("cd: HOME not set");
-                        }
-                    }
-                    else
-                    {
-                        change_directory(arg);
-                    }
+                    change_directory(arg);
                 }
             }
             Some("type") =>
