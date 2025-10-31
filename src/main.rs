@@ -2,21 +2,16 @@ use std::io::{self, Write};
 use std::env;
 use std::path::PathBuf;
 
-
-fn find_executable_in_path(name: &str) -> Option<PathBuf>
-{
-    if let Ok(path_var) = env::var("PATH")
-    {
-        for path in env::split_paths(&path_var)
-        {
+fn find_executable_in_path(name: &str) -> Option<PathBuf> {
+    env::var("PATH").ok().and_then(|path_var| {
+        for path in env::split_paths(&path_var) {
             let full_path = path.join(name);
-            if full_path.is_file()
-            {
+            if full_path.is_file() {
                 return Some(full_path);
             }
         }
-    }
-    None
+        None
+    })
 }
 
 
