@@ -10,7 +10,7 @@ fn find_executable_in_path(name: &str) -> Option<PathBuf>
         for path in env::split_paths(&path_var)
         {
             let full_path = path.join(name);
-            if full_path.exists() && full_path.is_file()
+            if full_path.is_file()
             {
                 return Some(full_path);
             }
