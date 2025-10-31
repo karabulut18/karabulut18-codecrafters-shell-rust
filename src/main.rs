@@ -34,13 +34,12 @@ fn find_executable_in_path(name: &str) -> Option<PathBuf>
 // catch the output and print
 fn execute(command: &str, args: &[&str])
 {
-    if find_executable_in_path(cmd).is_some() {
-        let args: Vec<&str> = parts.collect();
+    if find_executable_in_path(command).is_some() {
         
         // FIX: Use `Command::new(cmd)` (the filename) instead of `Command::new(path)`.
         // This relies on the system's internal PATH search (which we verified worked)
         // and correctly sets argv[0] to the filename as the tester expects.
-        match Command::new(cmd).args(&args).spawn() {
+        match std::process::Command::new(command).args(args).spawn() {
             Ok(mut child) => {
                 // Wait for the command to finish and capture its exit status
                 match child.wait() {
@@ -48,10 +47,10 @@ fn execute(command: &str, args: &[&str])
                     Err(e) => eprintln!("Execution error: {}", e),
                 }
             }
-            Err(e) => eprintln!("Failed to execute {}: {}", cmd, e),
+            Err(e) => eprintln!("Failed to execute {}: {}", command, e),
         }
     } else {
-        println!("{}: command not found", cmd);
+        println!("{}: command not found", command);
     }
 }
 
