@@ -106,7 +106,7 @@ fn main()
                 {
                     match arg
                     {
-                        "echo" | "exit" | "type" | "pwd" => println!("{} is a shell builtin", arg),
+                        "echo" | "exit" | "type" | "pwd" => println!("{} is a shell builtin", arg),
                         _ =>
                         {
                           if let Some(path) = find_executable_in_path(arg)
