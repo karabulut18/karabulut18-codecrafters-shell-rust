@@ -30,7 +30,19 @@ fn find_executable_in_path(name: &str) -> Option<PathBuf>
     })
 }
 
-
+// execute function
+// catch the output and print
+fn execute(command: &str, args: &[&str])
+{
+    if let Some(path) = find_executable_in_path(command){
+        let mut child = std::process::Command::new(path).args(args).spawn().expect("Failed to execute command");
+        let _  = child.wait();
+    }
+    else
+    {
+        println!("{}: command not found", command);
+    }
+}
 
 fn main()
 {
@@ -88,11 +100,10 @@ fn main()
                     }
                 }
             }
-            Some(cmd) =>
+            _ =>
             {
-                println!("{}: command not found", cmd);
+                execute(command.unwrap(), parts.collect::<Vec<&str>>().as_slice());
             }
-            None =>{}
         }
     }
 }
