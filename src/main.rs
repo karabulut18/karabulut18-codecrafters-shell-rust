@@ -114,7 +114,22 @@ fn main()
             {
                 if let Some(arg) = parts.next()
                 {
-                    change_directory(arg);
+                    let target = parts.next().unwrap_or("~");
+                    if target == "~"
+                    {
+                        if let Ok(home_dir) = env::var("HOME")
+                        {
+                            change_directory(&home_dir);
+                        }
+                        else
+                        {
+                            eprintln!("cd: HOME not set");
+                        }
+                    }
+                    else
+                    {
+                        change_directory(arg);
+                    }
                 }
             }
             Some("type") =>
