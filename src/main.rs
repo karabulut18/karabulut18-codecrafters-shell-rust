@@ -72,7 +72,7 @@ fn change_directory(path: &str)
     };
 
     if env::set_current_dir(&target_path).is_err(){
-        eprintln!("cd {}: No such file or directory", path);
+        eprintln!("cd: {}: No such file or directory", path);
     }
 }
 
