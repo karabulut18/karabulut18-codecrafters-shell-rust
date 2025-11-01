@@ -57,38 +57,81 @@ fn execute(command: &str, args: &[&str])
 fn change_directory(path: &str)
 {
     // if it is absolute path, check if the directory is exist
-    if path == "~"
-    {
-        if let Ok(home_dir) = env::var("HOME")
+    let target_path = if path == "~" {
+        match env::var("HOME")
         {
-            if let Err(_) = env::set_current_dir(&home_dir)
+            Ok(home_dir) => PathBuf::from(home_dir),
+            Err(_) =>
             {
                 eprintln!("cd: HOME not set");
+                return;
             }
         }
-    }
-    else if let Err(_) = env::set_current_dir(path)
-    {
-        eprintln!("cd: {}: No such file or directory", path);
+    } else {
+        PathBuf::from(path)
+    };
+
+    if env::set_current_dir(&target_path).is_err(){
+        eprintln!("cd {}: No such file or directory", path);
     }
 }
 
+fn parse_line(line: &str) -> Vec<String> {
+    let mut args = Vec::new();
+    let mut current_arg = String::new();
+    let mut in_quotes = false;
+
+    for c in line.chars() {
+        if c == '\'' {
+            in_quotes = !in_quotes;
+        }
+        else if c.is_whitespace() && !in_quotes
+        {
+            if !current_arg.is_empty()
+            {
+                // use mem::take to efficently move the string
+                args.push(std::mem::take(&mut current_arg));
+            }
+        }
+        else
+        {
+            current_arg.push(c);
+        }
+    }
+
+    if !current_arg.is_empty()
+    {
+        args.push(current_arg);
+    }
+    return args
+}
 
 fn main()
 {
     loop
     {
         print!("$ ");
-        io::stdout().flush().unwrap();    
+        io::stdout().flush().unwrap();
         let mut input = String::new();
         io::stdin().read_line(&mut input).unwrap();
-        let mut parts = input.trim().split_whitespace();
-        let command = parts.next();
+
+        let args = parse_line(&input.trim());
+        if args.is_empty()
+        {
+            continue;
+        }
+        let command = args[0].as_str();
+
+        // Map the rest of the arguments from &String to &str and collect them
+        let parts_strs: Vec<&str> = args[1..].iter().map(|s| s.as_str()).collect();
+        let parts = parts_strs.as_slice(); // parts is &[&str]
+
         match command
         {
-            Some("exit") =>
+            "exit" =>
             {
-                if let Some(arg) = parts.next()
+                // 'parts' is &[&str], so parts.first() gives Option<&str>
+                if let Some(arg) = parts.first()
                 {
                     if let Ok(exit_code) = arg.parse::<i32>()
                     {
@@ -104,12 +147,11 @@ fn main()
                     std::process::exit(0);
                 }
             }
-            Some("echo") =>
+            "echo" =>
             {
-                let output = parts.collect::<Vec<&str>>().join(" ");
-                println!("{}", output);
+                println!("{}", parts.join(" "));
             }
-            Some("pwd") =>
+            "pwd" =>
             {
                 if let Ok(current_dir) = env::current_dir()
                 {
@@ -120,18 +162,18 @@ fn main()
                     eprintln!("Failed to get current directory");
                 }
             }
-            Some("cd") =>
+            "cd" =>
             {
-                if let Some(arg) = parts.next()
+                if let Some(arg) = parts.first()
                 {
                     change_directory(arg);
                 }
             }
-            Some("type") =>
+            "type" =>
             {
-                if let Some(arg) = parts.next()
+                if let Some(arg) = parts.first() // 'arg' is &str
                 {
-                    match arg
+                    match *arg // arg is &str, so this works as before
                     {
                         "echo" | "exit" | "type" | "pwd" | "cd" => println!("{} is a shell builtin", arg),
                         _ =>
@@ -150,7 +192,8 @@ fn main()
             }
             _ =>
             {
-                execute(command.unwrap(), parts.collect::<Vec<&str>>().as_slice());
+                // parts is &[&str] which matches the execute function signature
+                execute(command, parts);
             }
         }
     }
