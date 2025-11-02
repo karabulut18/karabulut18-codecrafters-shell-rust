@@ -76,16 +76,28 @@ fn change_directory(path: &str)
     }
 }
 
-fn parse_line(line: &str) -> Vec<String> {
+fn arg_parse(line: &str) -> Vec<String> {
     let mut args = Vec::new();
     let mut current_arg = String::new();
-    let mut in_quotes = false;
+    let mut quote_char = None;
 
     for c in line.chars() {
-        if c == '\'' {
-            in_quotes = !in_quotes;
+        if c == '"' || c == '\'' {
+            match quote_char {
+                None =>
+                {
+                    quote_char = Some(c);
+                }
+                Some(q) if q == c =>
+                {
+                    quote_char = None;
+                }
+                Some (_) => {
+                    current_arg.push(c);
+                }
+            }
         }
-        else if c.is_whitespace() && !in_quotes
+        else if c.is_whitespace() && !quote_char.is_some()
         {
             if !current_arg.is_empty()
             {
@@ -115,7 +127,7 @@ fn main()
         let mut input = String::new();
         io::stdin().read_line(&mut input).unwrap();
 
-        let args = parse_line(&input.trim());
+        let args = arg_parse(&input.trim());
         if args.is_empty()
         {
             continue;
