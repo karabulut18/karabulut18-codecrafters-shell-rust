@@ -83,16 +83,14 @@ fn arg_parse(line: &str) -> Vec<String> {
     let mut escaped = false;
 
     for c in line.chars() {
-        if c == '\\' {
-            escaped = true;
-            continue;
-        }
         if escaped {
             current_arg.push(c);
             escaped = false;
-            continue;
         }
-        if c == '"' || c == '\'' {
+        else if c == '\\' &&  quote_char != Some('\'') {
+            escaped = true;
+        }
+        else if c == '"' || c == '\'' {
             match quote_char {
                 None =>
                 {
