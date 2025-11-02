@@ -45,14 +45,16 @@ fn execute(command: &str, args: &[&str], output_file: Option<String>)
                 .truncate(true)
                 .open(&output_file)
                 {
-                Ok(file) => {
-                    process_command.stdout(file);
+                    Ok(file) =>
+                    {
+                        process_command.stdout(file);
+                    }
+                    Err(e) =>
+                    {
+                        eprintln!("Failed to open output file: {}", e);
+                    }
+                
                 }
-                Err(e) => {
-                    eprintln!("Failed to open file {}: {}", output_file, e);
-                    return;
-                }
-            }
         }
         match process_command.spawn() {
             Ok(mut child) => {
@@ -235,7 +237,11 @@ fn main()
             }
             "echo" =>
             {
-                println!("$ {}", parts.join(" "));
+                println!("{}", parts.join(" "));
+                if output_file != None
+                {
+                    std::fs::write(output_file.unwrap(), parts.join(" ")).unwrap();
+                }
             }
             "pwd" =>
             {
@@ -267,6 +273,10 @@ fn main()
                           if let Some(path) = find_executable_in_path(arg)
                           {
                             println!("{} is {}", arg, path.display());
+                            if let Some(output_file) = output_file
+                            { 
+                                std::fs::write(output_file, format!("{} is {}", arg, path.display())).unwrap();
+                            }
                           }
                           else
                           {
