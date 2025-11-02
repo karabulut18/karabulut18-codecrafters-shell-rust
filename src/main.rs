@@ -84,7 +84,23 @@ fn arg_parse(line: &str) -> Vec<String> {
 
     for c in line.chars() {
         if escaped {
-            current_arg.push(c);
+            if quote_char == Some('"')
+            {
+                if c == '"' || c == '\\' {
+                    current_arg.push(c);
+                }
+                else
+                {
+                    // this backslash does not escape the character
+                    // both added
+                    current_arg.push('\\');
+                    current_arg.push(c);
+                }
+            }
+            else
+            {
+                current_arg.push(c);
+            }
             escaped = false;
         }
         else if c == '\\' &&  quote_char != Some('\'') {
