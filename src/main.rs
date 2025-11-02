@@ -87,7 +87,7 @@ fn arg_parse(line: &str) -> Vec<String> {
             current_arg.push(c);
             escaped = false;
         }
-        else if c == '\\' &&  quote_char != Some('\'') {
+        else if c == '\\' &&  quote_char == None {
             escaped = true;
         }
         else if c == '"' || c == '\'' {
