@@ -289,7 +289,7 @@ fn main()
                 {
                     let output = if  matches!(*arg, "echo" | "exit" | "type" | "pwd" | "cd")
                         {
-                            format!("{} is shell builtin", arg)
+                            format!("{} is a shell builtin", arg)
                         }
                         else if let Some(path) = find_executable_in_path(arg)
                         {
