@@ -235,7 +235,7 @@ fn main()
             }
             "echo" =>
             {
-                println!("{}", parts.join(" "));
+                println!("$ {}", parts.join(" "));
             }
             "pwd" =>
             {
