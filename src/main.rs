@@ -32,14 +32,29 @@ fn find_executable_in_path(name: &str) -> Option<PathBuf>
 
 // execute function
 // catch the output and print
-fn execute(command: &str, args: &[&str])
+fn execute(command: &str, args: &[&str], output_file: Option<String>)
 {
     if find_executable_in_path(command).is_some() {
-        
-        // FIX: Use `Command::new(cmd)` (the filename) instead of `Command::new(path)`.
-        // This relies on the system's internal PATH search (which we verified worked)
-        // and correctly sets argv[0] to the filename as the tester expects.
-        match std::process::Command::new(command).args(args).spawn() {
+
+        let mut process_command = std::process::Command::new(command);
+        process_command.args(args);
+        if let Some(output_file) = output_file {
+            match std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(&output_file)
+                {
+                Ok(file) => {
+                    process_command.stdout(file);
+                }
+                Err(e) => {
+                    eprintln!("Failed to open file {}: {}", output_file, e);
+                    return;
+                }
+            }
+        }
+        match process_command.spawn() {
             Ok(mut child) => {
                 // Wait for the command to finish and capture its exit status
                 match child.wait() {
@@ -151,23 +166,58 @@ fn main()
         let mut input = String::new();
         io::stdin().read_line(&mut input).unwrap();
 
-        let args = arg_parse(&input.trim());
-        if args.is_empty()
+        let raw_args = arg_parse(&input.trim());
+        if raw_args.is_empty()
         {
             continue;
         }
-        let command = args[0].as_str();
+
+        // detect if there is a redirect option in the command
+        let mut output_file: Option<String> = None;
+        let mut command_args: Vec<String> = Vec::new();
+        let mut error_in_parsing = false;
+
+        let mut i = 0;
+        while i < raw_args.len()
+        {
+            let arg = &raw_args[i];
+            if arg == ">" || arg == "1>"
+            {
+                i += 1;
+                if i >= raw_args.len()
+                {
+
+                    eprintln!("syntax error near unexpected token `>'");
+                    error_in_parsing = true;
+                    break;
+                }
+
+                output_file = Some(raw_args[i].clone());
+                i += 1;
+            }
+            else
+            {
+                command_args.push(arg.clone());
+                i += 1;
+            }
+        }
+
+        if error_in_parsing || command_args.is_empty()
+        {
+            continue;
+        }
+
+
+        let command = command_args[0].as_str();
+
 
         // Map the rest of the arguments from &String to &str and collect them
-        let parts_strs: Vec<&str> = args[1..].iter().map(|s| s.as_str()).collect();
-        let parts = parts_strs.as_slice(); // parts is &[&str]
-
+        let parts: Vec<&str> = command_args[1..].iter().map(|s| s.as_str()).collect();
         match command
         {
             "exit" =>
             {
-                // 'parts' is &[&str], so parts.first() gives Option<&str>
-                if let Some(arg) = parts.first()
+                if let Some(arg) = parts.get(0)
                 {
                     if let Ok(exit_code) = arg.parse::<i32>()
                     {
@@ -200,14 +250,14 @@ fn main()
             }
             "cd" =>
             {
-                if let Some(arg) = parts.first()
+                if let Some(arg) = parts.get(0)
                 {
                     change_directory(arg);
                 }
             }
             "type" =>
             {
-                if let Some(arg) = parts.first() // 'arg' is &str
+                if let Some(arg) = parts.get(0)
                 {
                     match *arg // arg is &str, so this works as before
                     {
@@ -229,7 +279,7 @@ fn main()
             _ =>
             {
                 // parts is &[&str] which matches the execute function signature
-                execute(command, parts);
+                execute(command, &parts, output_file);
             }
         }
     }
