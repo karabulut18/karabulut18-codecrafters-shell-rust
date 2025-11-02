@@ -237,10 +237,13 @@ fn main()
             }
             "echo" =>
             {
-                println!("{}", parts.join(" "));
                 if output_file != None
                 {
                     std::fs::write(output_file.unwrap(), parts.join(" ")).unwrap();
+                }
+                else
+                {
+                    println!("{}", parts.join(" "));
                 }
             }
             "pwd" =>
@@ -271,11 +274,14 @@ fn main()
                         _ =>
                         {
                           if let Some(path) = find_executable_in_path(arg)
-                          {
-                            println!("{} is {}", arg, path.display());
+                          {          
                             if let Some(output_file) = output_file
                             { 
                                 std::fs::write(output_file, format!("{} is {}", arg, path.display())).unwrap();
+                            }
+                            else
+                            {
+                                println!("{} is {}", arg, path.display());
                             }
                           }
                           else
