@@ -2,6 +2,8 @@ use std::io::{self, Write};
 use std::env;
 use std::path::PathBuf;
 use std::os::unix::fs::PermissionsExt;
+use std::fs::OpenOptions;
+
 
 
 fn find_executable_in_path(name: &str) -> Option<PathBuf>
@@ -28,6 +30,28 @@ fn find_executable_in_path(name: &str) -> Option<PathBuf>
         }
         None
     })
+}
+
+
+// Helper to handle output for built-in commands (echo, pwd, type)
+fn handle_built_in_output(output: &str, output_file: Option<String>) {
+    if let Some(file_path) = output_file {
+        // Use OpenOptions to open the file, truncating it if it exists (for the '>' operator)
+        match OpenOptions::new().write(true).create(true).truncate(true).open(&file_path) {
+            Ok(mut file) => {
+                // Write the output string and a newline in one operation
+                if let Err(e) = writeln!(file, "{}", output) {
+                    eprintln!("Error writing to file {}: {}", file_path, e);
+                }
+            }
+            Err(e) => {
+                eprintln!("Error opening file {}: {}", file_path, e);
+            }
+        }
+    } else {
+        // No redirection, print to standard output
+        println!("{}", output);
+    }
 }
 
 // execute function
@@ -237,20 +261,15 @@ fn main()
             }
             "echo" =>
             {
-                if output_file != None
-                {
-                    std::fs::write(output_file.unwrap(), parts.join(" ")).unwrap();
-                }
-                else
-                {
-                    println!("{}", parts.join(" "));
-                }
+                let output = parts.join(" ");
+                handle_built_in_output(&output, output_file);
             }
             "pwd" =>
             {
                 if let Ok(current_dir) = env::current_dir()
                 {
-                    println!("{}", current_dir.display());
+                    let output = current_dir.to_str().unwrap().to_string();
+                    handle_built_in_output(&output, output_file);
                 }
                 else
                 {
@@ -268,29 +287,20 @@ fn main()
             {
                 if let Some(arg) = parts.get(0)
                 {
-                    match *arg // arg is &str, so this works as before
-                    {
-                        "echo" | "exit" | "type" | "pwd" | "cd" => println!("{} is a shell builtin", arg),
-                        _ =>
+                    let output = if  matches!(*arg, "echo" | "exit" | "type" | "pwd" | "cd")
                         {
-                          if let Some(path) = find_executable_in_path(arg)
-                          {          
-                            if let Some(output_file) = output_file
-                            { 
-                                std::fs::write(output_file, format!("{} is {}", arg, path.display())).unwrap();
-                            }
-                            else
-                            {
-                                println!("{} is {}", arg, path.display());
-                            }
-                          }
-                          else
-                          {
-                            println!("{}: not found", arg);
-                          }
+                            format!("{} is shell builtin", arg)
                         }
-                    }
-                }
+                        else if let Some(path) = find_executable_in_path(arg)
+                        {
+                            format!("{} is {}", arg, path.display())
+                        }
+                        else
+                        {
+                            format!("{} not found", arg)
+                        };
+                    handle_built_in_output(&output, output_file);
+                };
             }
             _ =>
             {
