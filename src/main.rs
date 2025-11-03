@@ -34,8 +34,8 @@ fn find_executable_in_path(name: &str) -> Option<PathBuf>
 
 
 // Helper to handle output for built-in commands (echo, pwd, type)
-fn handle_built_in_output(output: &str, output_file: Option<String>) {
-    if let Some(file_path) = output_file {
+fn handle_built_in_output(output: &str, std_out: Option<String>, std_err: Option<String>) {
+    if let Some(file_path) = std_out {
         // Use OpenOptions to open the file, truncating it if it exists (for the '>' operator)
         match OpenOptions::new().write(true).create(true).truncate(true).open(&file_path) {
             Ok(mut file) => {
@@ -52,17 +52,34 @@ fn handle_built_in_output(output: &str, output_file: Option<String>) {
         // No redirection, print to standard output
         println!("{}", output);
     }
+
+    if let Some(file_path) = std_err {
+        match OpenOptions::new().write(true).create(true).truncate(true).open(&file_path) {
+            Ok(mut file) => {
+                // Write the error string and a newline in one operation
+                if let Err(e) = writeln!(file, "{}", output) {
+                    eprintln!("Error writing to file {}: {}", file_path, e);
+                }
+            }
+            Err (e) => {
+                eprintln!("Error opening file {}: {}", file_path, e);
+            }
+        }
+    } else {
+            // No redirection, print to standard error
+            eprintln!("{}", output);
+    }
 }
 
 // execute function
 // catch the output and print
-fn execute(command: &str, args: &[&str], output_file: Option<String>)
+fn execute(command: &str, args: &[&str], std_out: Option<String>, std_err: Option<String>)
 {
     if find_executable_in_path(command).is_some() {
 
         let mut process_command = std::process::Command::new(command);
         process_command.args(args);
-        if let Some(output_file) = output_file {
+        if let Some(output_file) = std_out {
             match std::fs::OpenOptions::new()
                 .write(true)
                 .create(true)
@@ -80,6 +97,24 @@ fn execute(command: &str, args: &[&str], output_file: Option<String>)
                 
                 }
         }
+        if let Some(error_file) = std_err {
+            match std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(&error_file)
+                {
+                    Ok(file) =>
+                    {
+                        process_command.stderr(file);
+                    }
+                    Err(e) =>
+                    {
+                        eprintln!("Failed to open error file: {}", e);
+                    }
+                }
+        }
+
         match process_command.spawn() {
             Ok(mut child) => {
                 // Wait for the command to finish and capture its exit status
@@ -199,7 +234,8 @@ fn main()
         }
 
         // detect if there is a redirect option in the command
-        let mut output_file: Option<String> = None;
+        let mut std_out_file: Option<String> = None;
+        let mut std_err_file: Option<String> = None;
         let mut command_args: Vec<String> = Vec::new();
         let mut error_in_parsing = false;
 
@@ -218,7 +254,21 @@ fn main()
                     break;
                 }
 
-                output_file = Some(raw_args[i].clone());
+                std_out_file = Some(raw_args[i].clone());
+                i += 1;
+            }
+            else if arg == "2>"
+            {
+                i += 1;
+                if i >= raw_args.len()
+                {
+
+                    eprintln!("syntax error near unexpected token `>'");
+                    error_in_parsing = true;
+                    break;
+                }
+
+                std_err_file = Some(raw_args[i].clone());
                 i += 1;
             }
             else
@@ -262,14 +312,14 @@ fn main()
             "echo" =>
             {
                 let output = parts.join(" ");
-                handle_built_in_output(&output, output_file);
+                handle_built_in_output(&output, std_out_file, std_err_file);
             }
             "pwd" =>
             {
                 if let Ok(current_dir) = env::current_dir()
                 {
                     let output = current_dir.to_str().unwrap().to_string();
-                    handle_built_in_output(&output, output_file);
+                    handle_built_in_output(&output, std_out_file, std_err_file);
                 }
                 else
                 {
@@ -299,13 +349,13 @@ fn main()
                         {
                             format!("{} not found", arg)
                         };
-                    handle_built_in_output(&output, output_file);
+                    handle_built_in_output(&output, std_out_file, std_err_file);
                 };
             }
             _ =>
             {
                 // parts is &[&str] which matches the execute function signature
-                execute(command, &parts, output_file);
+                execute(command, &parts, std_out_file, std_err_file);
             }
         }
     }
