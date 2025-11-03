@@ -36,7 +36,7 @@ impl Completer for ShellHelper {
             .filter(|cmd| cmd.starts_with(prefix))
             .map(|cmd| CompletionPair {
                 display: cmd.to_string(),
-                replacement: cmd.to_string(),
+                replacement: format!("{} ", cmd)
             })
             .collect();
 
