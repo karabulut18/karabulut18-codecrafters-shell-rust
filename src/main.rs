@@ -53,7 +53,9 @@ fn handle_built_in_output(std_out_s: &str, std_out: Option<String>, std_err_s: &
         }
     } else {
         // No redirection, print to standard output
-        println!("{}", std_out_s);
+        if !std_out_s.is_empty() {
+            println!("{}", std_out_s);
+        }
     }
 
     if let Some(file_path) = std_err {
@@ -73,9 +75,11 @@ fn handle_built_in_output(std_out_s: &str, std_out: Option<String>, std_err_s: &
         }
     } else {
             // No redirection, print to standard error
-            eprintln!("{}", std_err_s);
+            if !std_err_s.is_empty()
+            {
+                eprintln!("{}", std_err_s);
+            }
     }
-
 }
 
 // execute function
