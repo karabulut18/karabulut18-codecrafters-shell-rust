@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::os::unix::fs::PermissionsExt;
 use std::fs::OpenOptions;
 
+use rustyline::config::{CompletionType, Config, BellStyle};
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 use rustyline::completion::{Completer, Pair as CompletionPair};
@@ -22,9 +23,9 @@ struct ShellHelper{
 // 2. Implement the Completer trait
 impl Completer for ShellHelper {
     type Candidate = CompletionPair;
-
     fn complete(&self, line: &str, pos: usize, _ctx: &Context<'_>) -> Result<(usize, Vec<CompletionPair>)> {
         // Find the starting position of the word currently being typed
+
         let start = line[..pos]
             .rfind(|c: char| c.is_whitespace())
             .map_or(0, |i| i + 1);
@@ -495,6 +496,7 @@ fn run_command(input: &str){
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> 
 {
+    let config = Config::builder().completion_type(CompletionType::List).bell_style(BellStyle::Audible).build();
     let mut all_commands = get_executables_in_path();
 
     for builtin in BUILTINS
@@ -507,7 +509,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>>
 
     let prompt = "$ ";
     let helper = ShellHelper{ all_commands };
-    let mut rl = Editor::<ShellHelper>::new()?;
+    let mut rl = Editor::<ShellHelper>::with_config(config)?;
     rl.set_helper(Some(helper));
 
     loop
