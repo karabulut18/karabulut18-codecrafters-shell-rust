@@ -40,7 +40,7 @@ fn handle_built_in_output(std_out_s: &str, std_out: Option<String>, std_out_appe
         // Use OpenOptions to open the file, truncating it if it exists (for the '>' operator)
         // if std_out_append is true, append the output
 
-        match OpenOptions::new().write(true).append(std_out_append).create(true).truncate(true).open(&file_path) {
+        match OpenOptions::new().write(true).append(std_out_append).create(true).truncate(!std_out_append).open(&file_path) {
             Ok(mut file) => {
                 // Write the output string and a newline in one operation
                 if !std_out_s.is_empty() {
@@ -61,7 +61,7 @@ fn handle_built_in_output(std_out_s: &str, std_out: Option<String>, std_out_appe
     }
 
     if let Some(file_path) = std_err {
-        match OpenOptions::new().write(true).append(std_err_append).create(true).truncate(true).open(&file_path) {
+        match OpenOptions::new().write(true).append(std_err_append).create(true).truncate(!std_err_append).open(&file_path) {
             Ok(mut file) => {
                 // Write the error string and a newline in one operation
                 if !std_err_s.is_empty()
