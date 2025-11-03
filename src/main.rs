@@ -97,7 +97,7 @@ fn execute(command: &str, args: &[&str], std_out: Option<String>, std_out_append
                 .write(true)
                 .append(std_out_append)
                 .create(true)
-                .truncate(true)
+                .truncate(!std_out_append)
                 .open(&output_file)
                 {
                     Ok(file) =>
@@ -116,7 +116,7 @@ fn execute(command: &str, args: &[&str], std_out: Option<String>, std_out_append
                 .write(true)
                 .append(std_err_append)
                 .create(true)
-                .truncate(true)
+                .truncate(!std_err_append)
                 .open(&error_file)
                 {
                     Ok(file) =>
