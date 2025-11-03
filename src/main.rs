@@ -16,7 +16,7 @@ const BUILTINS: &[&str] = &["echo", "exit", "type", "pwd", "cd"];
 
 #[derive(Default)]
 struct ShellHelper{
-    builtins: &'static [&'static str]
+    all_commands: Vec<String>
 }
 
 // 2. Implement the Completer trait
@@ -32,7 +32,7 @@ impl Completer for ShellHelper {
         let prefix = &line[start..pos];
 
         // Filter BUILTINS based on the current prefix
-        let candidates = self.builtins.iter()
+        let candidates = self.all_commands.iter()
             .filter(|cmd| cmd.starts_with(prefix))
             .map(|cmd| CompletionPair {
                 display: cmd.to_string(),
@@ -77,6 +77,48 @@ fn find_executable_in_path(name: &str) -> Option<PathBuf>
         }
         None
     })
+}
+
+// Check if a file at a given path is executable by the current user
+fn is_executable(path: &PathBuf) -> bool {
+    if path.is_file() {
+        if let Ok(metadata) = path.metadata() {
+            // Check if the executable bit is set for the owner, group, or others (0o111)
+            return metadata.permissions().mode() & 0o111 != 0;
+        }
+    }
+    false
+}
+
+// Scans the PATH environment variable and returns a Vec of all executable file names.
+fn get_executables_in_path() -> Vec<String> {
+    let mut executables = Vec::new();
+    
+    // Attempt to get the PATH environment variable
+    if let Ok(path_var) = env::var("PATH") {
+        
+        // Iterate over all directories in PATH
+        for path_dir in env::split_paths(&path_var) {
+            
+            // Check if the path is a directory we can read
+            if let Ok(entries) = std::fs::read_dir(&path_dir) {
+                
+                // Iterate over every item in the directory
+                for entry in entries.filter_map(|e| e.ok()) {
+                    let path = entry.path();
+                    
+                    // Check if the file is executable
+                    if is_executable(&path) {
+                        // We only care about the file name for autocompletion
+                        if let Some(file_name) = path.file_name().and_then(|name| name.to_str()) {
+                            executables.push(file_name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    executables
 }
 
 
@@ -453,8 +495,18 @@ fn run_command(input: &str){
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> 
 {
+    let mut all_commands = get_executables_in_path();
+
+    for builtin in BUILTINS
+    {
+        if !all_commands.contains(&builtin.to_string())
+        {
+            all_commands.push(builtin.to_string());
+        }
+    }
+
     let prompt = "$ ";
-    let helper = ShellHelper{ builtins: BUILTINS};
+    let helper = ShellHelper{ all_commands };
     let mut rl = Editor::<ShellHelper>::new()?;
     rl.set_helper(Some(helper));
 
