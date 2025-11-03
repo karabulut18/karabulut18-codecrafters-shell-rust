@@ -36,42 +36,46 @@ fn find_executable_in_path(name: &str) -> Option<PathBuf>
 // Helper to handle output for built-in commands (echo, pwd, type)
 fn handle_built_in_output(std_out_s: &str, std_out: Option<String>, std_err_s: &str, std_err: Option<String>) {
 
-        if let Some(file_path) = std_out {
-            // Use OpenOptions to open the file, truncating it if it exists (for the '>' operator)
-            match OpenOptions::new().write(true).create(true).truncate(true).open(&file_path) {
-                Ok(mut file) => {
-                    // Write the output string and a newline in one operation
+    if let Some(file_path) = std_out {
+        // Use OpenOptions to open the file, truncating it if it exists (for the '>' operator)
+        match OpenOptions::new().write(true).create(true).truncate(true).open(&file_path) {
+            Ok(mut file) => {
+                // Write the output string and a newline in one operation
+                if !std_out_s.is_empty() {
                     if let Err(e) = writeln!(file, "{}", std_out_s) {
                         eprintln!("Error writing to file {}: {}", file_path, e);
                     }
                 }
-                Err(e) => {
-                    eprintln!("Error opening file {}: {}", file_path, e);
-                }
             }
-        } else {
-            // No redirection, print to standard output
-            println!("{}", std_out_s);
+            Err(e) => {
+                eprintln!("Error opening file {}: {}", file_path, e);
+            }
         }
+    } else {
+        // No redirection, print to standard output
+        println!("{}", std_out_s);
+    }
 
-    if !std_err_s.is_empty(){
-        if let Some(file_path) = std_err {
-            match OpenOptions::new().write(true).create(true).truncate(true).open(&file_path) {
-                Ok(mut file) => {
-                    // Write the error string and a newline in one operation
+    if let Some(file_path) = std_err {
+        match OpenOptions::new().write(true).create(true).truncate(true).open(&file_path) {
+            Ok(mut file) => {
+                // Write the error string and a newline in one operation
+                if !std_err_s.is_empty()
+                {
                     if let Err(e) = writeln!(file, "{}", std_err_s) {
                         eprintln!("Error writing to file {}: {}", file_path, e);
                     }
                 }
-                Err (e) => {
-                    eprintln!("Error opening file {}: {}", file_path, e);
-                }
             }
-        } else {
-                // No redirection, print to standard error
-                eprintln!("{}", std_err_s);
+            Err (e) => {
+                eprintln!("Error opening file {}: {}", file_path, e);
+            }
         }
+    } else {
+            // No redirection, print to standard error
+            eprintln!("{}", std_err_s);
     }
+
 }
 
 // execute function
