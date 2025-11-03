@@ -34,13 +34,13 @@ fn find_executable_in_path(name: &str) -> Option<PathBuf>
 
 
 // Helper to handle output for built-in commands (echo, pwd, type)
-fn handle_built_in_output(output: &str, std_out: Option<String>, std_err: Option<String>) {
+fn handle_built_in_output(std_out_s: &str, std_out: Option<String>, std_err_s: &str, std_err: Option<String>) {
     if let Some(file_path) = std_out {
         // Use OpenOptions to open the file, truncating it if it exists (for the '>' operator)
         match OpenOptions::new().write(true).create(true).truncate(true).open(&file_path) {
             Ok(mut file) => {
                 // Write the output string and a newline in one operation
-                if let Err(e) = writeln!(file, "{}", output) {
+                if let Err(e) = writeln!(file, "{}", std_out_s) {
                     eprintln!("Error writing to file {}: {}", file_path, e);
                 }
             }
@@ -50,14 +50,14 @@ fn handle_built_in_output(output: &str, std_out: Option<String>, std_err: Option
         }
     } else {
         // No redirection, print to standard output
-        println!("{}", output);
+        println!("{}", std_out_s);
     }
 
     if let Some(file_path) = std_err {
         match OpenOptions::new().write(true).create(true).truncate(true).open(&file_path) {
             Ok(mut file) => {
                 // Write the error string and a newline in one operation
-                if let Err(e) = writeln!(file, "{}", output) {
+                if let Err(e) = writeln!(file, "{}", std_err_s) {
                     eprintln!("Error writing to file {}: {}", file_path, e);
                 }
             }
@@ -67,7 +67,7 @@ fn handle_built_in_output(output: &str, std_out: Option<String>, std_err: Option
         }
     } else {
             // No redirection, print to standard error
-            eprintln!("{}", output);
+            eprintln!("{}", std_err_s);
     }
 }
 
@@ -311,19 +311,21 @@ fn main()
             }
             "echo" =>
             {
-                let output = parts.join(" ");
-                handle_built_in_output(&output, std_out_file, std_err_file);
+                let std_out_s = parts.join(" ");
+                let std_err_s = "";
+                handle_built_in_output(&std_out_s, std_out_file, std_err_s,std_err_file);
             }
             "pwd" =>
             {
                 if let Ok(current_dir) = env::current_dir()
                 {
-                    let output = current_dir.to_str().unwrap().to_string();
-                    handle_built_in_output(&output, std_out_file, std_err_file);
+                    let std_out_s = current_dir.to_str().unwrap().to_string();
+                    handle_built_in_output(&std_out_s, std_out_file, "",std_err_file);
                 }
                 else
                 {
-                    eprintln!("Failed to get current directory");
+                    let std_err_s = "Failed to get current directory";
+                    handle_built_in_output("", std_out_file, std_err_s,std_err_file);
                 }
             }
             "cd" =>
@@ -337,19 +339,21 @@ fn main()
             {
                 if let Some(arg) = parts.get(0)
                 {
-                    let output = if  matches!(*arg, "echo" | "exit" | "type" | "pwd" | "cd")
-                        {
-                            format!("{} is a shell builtin", arg)
-                        }
-                        else if let Some(path) = find_executable_in_path(arg)
-                        {
-                            format!("{} is {}", arg, path.display())
-                        }
-                        else
-                        {
-                            format!("{} not found", arg)
-                        };
-                    handle_built_in_output(&output, std_out_file, std_err_file);
+                    let mut std_out_s = String::new();
+                    let mut std_err_s = String::new();
+                    if  matches!(*arg, "echo" | "exit" | "type" | "pwd" | "cd")
+                    {
+                        std_out_s = format!("{} is a shell builtin", arg)
+                    }
+                    else if let Some(path) = find_executable_in_path(arg)
+                    {
+                        std_out_s = format!("{} is {}", arg, path.display())
+                    }
+                    else
+                    {
+                        std_err_s = format!("{} not found", arg)
+                    };
+                    handle_built_in_output(&std_out_s, std_out_file, &std_err_s, std_err_file);
                 };
             }
             _ =>
