@@ -34,11 +34,13 @@ fn find_executable_in_path(name: &str) -> Option<PathBuf>
 
 
 // Helper to handle output for built-in commands (echo, pwd, type)
-fn handle_built_in_output(std_out_s: &str, std_out: Option<String>, std_err_s: &str, std_err: Option<String>) {
+fn handle_built_in_output(std_out_s: &str, std_out: Option<String>, std_out_append: bool, std_err_s: &str, std_err: Option<String>, std_err_append: bool) {
 
     if let Some(file_path) = std_out {
         // Use OpenOptions to open the file, truncating it if it exists (for the '>' operator)
-        match OpenOptions::new().write(true).create(true).truncate(true).open(&file_path) {
+        // if std_out_append is true, append the output
+
+        match OpenOptions::new().write(true).append(std_out_append).create(true).truncate(true).open(&file_path) {
             Ok(mut file) => {
                 // Write the output string and a newline in one operation
                 if !std_out_s.is_empty() {
@@ -59,7 +61,7 @@ fn handle_built_in_output(std_out_s: &str, std_out: Option<String>, std_err_s: &
     }
 
     if let Some(file_path) = std_err {
-        match OpenOptions::new().write(true).create(true).truncate(true).open(&file_path) {
+        match OpenOptions::new().write(true).append(std_err_append).create(true).truncate(true).open(&file_path) {
             Ok(mut file) => {
                 // Write the error string and a newline in one operation
                 if !std_err_s.is_empty()
@@ -74,17 +76,17 @@ fn handle_built_in_output(std_out_s: &str, std_out: Option<String>, std_err_s: &
             }
         }
     } else {
-            // No redirection, print to standard error
-            if !std_err_s.is_empty()
-            {
-                eprintln!("{}", std_err_s);
-            }
+        // No redirection, print to standard error
+        if !std_err_s.is_empty()
+        {
+            eprintln!("{}", std_err_s);
+        }
     }
 }
 
 // execute function
 // catch the output and print
-fn execute(command: &str, args: &[&str], std_out: Option<String>, std_err: Option<String>)
+fn execute(command: &str, args: &[&str], std_out: Option<String>, std_out_append: bool, std_err: Option<String>, std_err_append: bool)
 {
     if find_executable_in_path(command).is_some() {
 
@@ -93,6 +95,7 @@ fn execute(command: &str, args: &[&str], std_out: Option<String>, std_err: Optio
         if let Some(output_file) = std_out {
             match std::fs::OpenOptions::new()
                 .write(true)
+                .append(std_out_append)
                 .create(true)
                 .truncate(true)
                 .open(&output_file)
@@ -111,6 +114,7 @@ fn execute(command: &str, args: &[&str], std_out: Option<String>, std_err: Optio
         if let Some(error_file) = std_err {
             match std::fs::OpenOptions::new()
                 .write(true)
+                .append(std_err_append)
                 .create(true)
                 .truncate(true)
                 .open(&error_file)
@@ -237,6 +241,8 @@ fn main()
         io::stdout().flush().unwrap();
         let mut input = String::new();
         io::stdin().read_line(&mut input).unwrap();
+        let mut std_out_r_append = false;
+        let mut std_err_r_append = false;
 
         let raw_args = arg_parse(&input.trim());
         if raw_args.is_empty()
@@ -278,6 +284,35 @@ fn main()
                     error_in_parsing = true;
                     break;
                 }
+
+                std_err_file = Some(raw_args[i].clone());
+                i += 1;
+            }
+            else if arg == ">>" || arg == "1>>"
+            {
+                i += 1;
+                if i >= raw_args.len()
+                {
+                    eprintln!("syntax error near unexpected token `>'");
+                    error_in_parsing = true;
+                    break;
+                }
+                std_out_r_append = true;
+
+                std_out_file = Some(raw_args[i].clone());
+                i += 1;
+            }
+            else if arg == "2>>"
+            {
+                i += 1;
+                if i >= raw_args.len()
+                {
+
+                    eprintln!("syntax error near unexpected token `>'");
+                    error_in_parsing = true;
+                    break;
+                }
+                std_err_r_append = true;
 
                 std_err_file = Some(raw_args[i].clone());
                 i += 1;
@@ -324,19 +359,19 @@ fn main()
             {
                 let std_out_s = parts.join(" ");
                 let std_err_s = "";
-                handle_built_in_output(&std_out_s, std_out_file, std_err_s,std_err_file);
+                handle_built_in_output(&std_out_s, std_out_file,std_out_r_append, std_err_s, std_err_file, std_err_r_append);
             }
             "pwd" =>
             {
                 if let Ok(current_dir) = env::current_dir()
                 {
                     let std_out_s = current_dir.to_str().unwrap().to_string();
-                    handle_built_in_output(&std_out_s, std_out_file, "",std_err_file);
+                    handle_built_in_output(&std_out_s, std_out_file, std_out_r_append, "", std_err_file, std_err_r_append);
                 }
                 else
                 {
                     let std_err_s = "Failed to get current directory";
-                    handle_built_in_output("", std_out_file, std_err_s,std_err_file);
+                    handle_built_in_output("", std_out_file, std_out_r_append, std_err_s,std_err_file, std_err_r_append);
                 }
             }
             "cd" =>
@@ -364,13 +399,13 @@ fn main()
                     {
                         std_err_s = format!("{} not found", arg)
                     };
-                    handle_built_in_output(&std_out_s, std_out_file, &std_err_s, std_err_file);
+                    handle_built_in_output(&std_out_s, std_out_file, std_out_r_append,&std_err_s, std_err_file, std_err_r_append);
                 };
             }
             _ =>
             {
                 // parts is &[&str] which matches the execute function signature
-                execute(command, &parts, std_out_file, std_err_file);
+                execute(command, &parts, std_out_file, std_out_r_append, std_err_file, std_err_r_append);
             }
         }
     }
