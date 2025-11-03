@@ -1,10 +1,57 @@
-use std::io::{self, Write};
+use std::io::{Write};
 use std::env;
 use std::path::PathBuf;
 use std::os::unix::fs::PermissionsExt;
 use std::fs::OpenOptions;
 
+use rustyline::error::ReadlineError;
+use rustyline::Editor;
+use rustyline::completion::{Completer, Pair as CompletionPair};
+use rustyline::highlight::Highlighter;
+use rustyline::hint::Hinter;
+use rustyline::validate::Validator;
+use rustyline::{Result, Context, Helper};
 
+const BUILTINS: &[&str] = &["echo", "exit", "type", "pwd", "cd"];
+
+#[derive(Default)]
+struct ShellHelper{
+    builtins: &'static [&'static str]
+}
+
+// 2. Implement the Completer trait
+impl Completer for ShellHelper {
+    type Candidate = CompletionPair;
+
+    fn complete(&self, line: &str, pos: usize, _ctx: &Context<'_>) -> Result<(usize, Vec<CompletionPair>)> {
+        // Find the starting position of the word currently being typed
+        let start = line[..pos]
+            .rfind(|c: char| c.is_whitespace())
+            .map_or(0, |i| i + 1);
+        
+        let prefix = &line[start..pos];
+
+        // Filter BUILTINS based on the current prefix
+        let candidates = self.builtins.iter()
+            .filter(|cmd| cmd.starts_with(prefix))
+            .map(|cmd| CompletionPair {
+                display: cmd.to_string(),
+                replacement: cmd.to_string(),
+            })
+            .collect();
+
+        Ok((start, candidates))
+    }
+}
+
+
+// 3. Implement required Helper traits using default/empty implementations
+impl Helper for ShellHelper {}
+impl Hinter for ShellHelper {
+    type Hint = String;
+}
+impl Highlighter for ShellHelper {}
+impl Validator for ShellHelper {}
 
 fn find_executable_in_path(name: &str) -> Option<PathBuf>
 {
@@ -233,180 +280,210 @@ fn arg_parse(line: &str) -> Vec<String> {
     return args
 }
 
-fn main()
-{
-    loop
+fn run_command(input: &str){
+
+    let mut std_out_r_append = false;
+    let mut std_err_r_append = false;
+
+    let raw_args = arg_parse(&input.trim());
+    if raw_args.is_empty()
     {
-        print!("$ ");
-        io::stdout().flush().unwrap();
-        let mut input = String::new();
-        io::stdin().read_line(&mut input).unwrap();
-        let mut std_out_r_append = false;
-        let mut std_err_r_append = false;
+        return;
+    }
 
-        let raw_args = arg_parse(&input.trim());
-        if raw_args.is_empty()
+    // detect if there is a redirect option in the command
+    let mut std_out_file: Option<String> = None;
+    let mut std_err_file: Option<String> = None;
+    let mut command_args: Vec<String> = Vec::new();
+    let mut error_in_parsing = false;
+
+    let mut i = 0;
+    while i < raw_args.len()
+    {
+        let arg = &raw_args[i];
+        if arg == ">" || arg == "1>"
         {
-            continue;
+            i += 1;
+            if i >= raw_args.len()
+            {
+
+                eprintln!("syntax error near unexpected token `>'");
+                error_in_parsing = true;
+                break;
+            }
+
+            std_out_file = Some(raw_args[i].clone());
+            i += 1;
         }
-
-        // detect if there is a redirect option in the command
-        let mut std_out_file: Option<String> = None;
-        let mut std_err_file: Option<String> = None;
-        let mut command_args: Vec<String> = Vec::new();
-        let mut error_in_parsing = false;
-
-        let mut i = 0;
-        while i < raw_args.len()
+        else if arg == "2>"
         {
-            let arg = &raw_args[i];
-            if arg == ">" || arg == "1>"
+            i += 1;
+            if i >= raw_args.len()
             {
-                i += 1;
-                if i >= raw_args.len()
-                {
 
-                    eprintln!("syntax error near unexpected token `>'");
-                    error_in_parsing = true;
-                    break;
-                }
-
-                std_out_file = Some(raw_args[i].clone());
-                i += 1;
+                eprintln!("syntax error near unexpected token `>'");
+                error_in_parsing = true;
+                break;
             }
-            else if arg == "2>"
+
+            std_err_file = Some(raw_args[i].clone());
+            i += 1;
+        }
+        else if arg == ">>" || arg == "1>>"
+        {
+            i += 1;
+            if i >= raw_args.len()
             {
-                i += 1;
-                if i >= raw_args.len()
-                {
-
-                    eprintln!("syntax error near unexpected token `>'");
-                    error_in_parsing = true;
-                    break;
-                }
-
-                std_err_file = Some(raw_args[i].clone());
-                i += 1;
+                eprintln!("syntax error near unexpected token `>'");
+                error_in_parsing = true;
+                break;
             }
-            else if arg == ">>" || arg == "1>>"
-            {
-                i += 1;
-                if i >= raw_args.len()
-                {
-                    eprintln!("syntax error near unexpected token `>'");
-                    error_in_parsing = true;
-                    break;
-                }
-                std_out_r_append = true;
+            std_out_r_append = true;
 
-                std_out_file = Some(raw_args[i].clone());
-                i += 1;
+            std_out_file = Some(raw_args[i].clone());
+            i += 1;
+        }
+        else if arg == "2>>"
+        {
+            i += 1;
+            if i >= raw_args.len()
+            {
+
+                eprintln!("syntax error near unexpected token `>'");
+                error_in_parsing = true;
+                break;
             }
-            else if arg == "2>>"
+            std_err_r_append = true;
+
+            std_err_file = Some(raw_args[i].clone());
+            i += 1;
+        }
+        else
+        {
+            command_args.push(arg.clone());
+            i += 1;
+        }
+    }
+
+    if error_in_parsing || command_args.is_empty()
+    {
+        return;
+    }
+
+
+    let command = command_args[0].as_str();
+
+
+    // Map the rest of the arguments from &String to &str and collect them
+    let parts: Vec<&str> = command_args[1..].iter().map(|s| s.as_str()).collect();
+    match command
+    {
+        "exit" =>
+        {
+            if let Some(arg) = parts.get(0)
             {
-                i += 1;
-                if i >= raw_args.len()
+                if let Ok(exit_code) = arg.parse::<i32>()
                 {
-
-                    eprintln!("syntax error near unexpected token `>'");
-                    error_in_parsing = true;
-                    break;
+                    std::process::exit(exit_code);
                 }
-                std_err_r_append = true;
-
-                std_err_file = Some(raw_args[i].clone());
-                i += 1;
+                else
+                {
+                    std::process::exit(1);
+                }
             }
             else
             {
-                command_args.push(arg.clone());
-                i += 1;
+                std::process::exit(0);
             }
         }
-
-        if error_in_parsing || command_args.is_empty()
+        "echo" =>
         {
-            continue;
+            let std_out_s = parts.join(" ");
+            let std_err_s = "";
+            handle_built_in_output(&std_out_s, std_out_file,std_out_r_append, std_err_s, std_err_file, std_err_r_append);
         }
-
-
-        let command = command_args[0].as_str();
-
-
-        // Map the rest of the arguments from &String to &str and collect them
-        let parts: Vec<&str> = command_args[1..].iter().map(|s| s.as_str()).collect();
-        match command
+        "pwd" =>
         {
-            "exit" =>
+            if let Ok(current_dir) = env::current_dir()
             {
-                if let Some(arg) = parts.get(0)
+                let std_out_s = current_dir.to_str().unwrap().to_string();
+                handle_built_in_output(&std_out_s, std_out_file, std_out_r_append, "", std_err_file, std_err_r_append);
+            }
+            else
+            {
+                let std_err_s = "Failed to get current directory";
+                handle_built_in_output("", std_out_file, std_out_r_append, std_err_s,std_err_file, std_err_r_append);
+            }
+        }
+        "cd" =>
+        {
+            if let Some(arg) = parts.get(0)
+            {
+                change_directory(arg);
+            }
+        }
+        "type" =>
+        {
+            if let Some(arg) = parts.get(0)
+            {
+                let mut std_out_s = String::new();
+                let mut std_err_s = String::new();
+                if  matches!(*arg, "echo" | "exit" | "type" | "pwd" | "cd")
                 {
-                    if let Ok(exit_code) = arg.parse::<i32>()
-                    {
-                        std::process::exit(exit_code);
-                    }
-                    else
-                    {
-                        std::process::exit(1);
-                    }
+                    std_out_s = format!("{} is a shell builtin", arg)
+                }
+                else if let Some(path) = find_executable_in_path(arg)
+                {
+                    std_out_s = format!("{} is {}", arg, path.display())
                 }
                 else
                 {
-                    std::process::exit(0);
-                }
-            }
-            "echo" =>
-            {
-                let std_out_s = parts.join(" ");
-                let std_err_s = "";
-                handle_built_in_output(&std_out_s, std_out_file,std_out_r_append, std_err_s, std_err_file, std_err_r_append);
-            }
-            "pwd" =>
-            {
-                if let Ok(current_dir) = env::current_dir()
-                {
-                    let std_out_s = current_dir.to_str().unwrap().to_string();
-                    handle_built_in_output(&std_out_s, std_out_file, std_out_r_append, "", std_err_file, std_err_r_append);
-                }
-                else
-                {
-                    let std_err_s = "Failed to get current directory";
-                    handle_built_in_output("", std_out_file, std_out_r_append, std_err_s,std_err_file, std_err_r_append);
-                }
-            }
-            "cd" =>
-            {
-                if let Some(arg) = parts.get(0)
-                {
-                    change_directory(arg);
-                }
-            }
-            "type" =>
-            {
-                if let Some(arg) = parts.get(0)
-                {
-                    let mut std_out_s = String::new();
-                    let mut std_err_s = String::new();
-                    if  matches!(*arg, "echo" | "exit" | "type" | "pwd" | "cd")
-                    {
-                        std_out_s = format!("{} is a shell builtin", arg)
-                    }
-                    else if let Some(path) = find_executable_in_path(arg)
-                    {
-                        std_out_s = format!("{} is {}", arg, path.display())
-                    }
-                    else
-                    {
-                        std_err_s = format!("{} not found", arg)
-                    };
-                    handle_built_in_output(&std_out_s, std_out_file, std_out_r_append,&std_err_s, std_err_file, std_err_r_append);
+                    std_err_s = format!("{} not found", arg)
                 };
-            }
-            _ =>
-            {
-                // parts is &[&str] which matches the execute function signature
-                execute(command, &parts, std_out_file, std_out_r_append, std_err_file, std_err_r_append);
+                handle_built_in_output(&std_out_s, std_out_file, std_out_r_append,&std_err_s, std_err_file, std_err_r_append);
+            };
+        }
+        _ =>
+        {
+            // parts is &[&str] which matches the execute function signature
+            execute(command, &parts, std_out_file, std_out_r_append, std_err_file, std_err_r_append);
+        }
+    }
+}
+
+fn main() -> std::result::Result<(), Box<dyn std::error::Error>> 
+{
+    let prompt = "$ ";
+    let helper = ShellHelper{ builtins: BUILTINS};
+    let mut rl = Editor::<ShellHelper>::new()?;
+    rl.set_helper(Some(helper));
+
+    loop
+    {
+        let readline = rl.readline(prompt);
+        match readline {
+            Ok(line) => {
+                // Add command to history (Enables up/down arrows immediately)
+                rl.add_history_entry(line.as_str());
+                
+                // Execute command
+                run_command(&line);
+            },
+            Err(ReadlineError::Interrupted) => {
+                // Ctrl-C
+                println!("^C");
+                continue;
+            },
+            Err(ReadlineError::Eof) => {
+                // Ctrl-D
+                println!("exit");
+                break;
+            },
+            Err(err) => {
+                eprintln!("Error: {:?}", err);
+                break;
             }
         }
     }
+    Ok(())
 }
