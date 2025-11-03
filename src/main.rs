@@ -33,13 +33,15 @@ impl Completer for ShellHelper {
         let prefix = &line[start..pos];
 
         // Filter BUILTINS based on the current prefix
-        let candidates = self.all_commands.iter()
+        let mut candidates: Vec<CompletionPair> = self.all_commands
+            .iter()
             .filter(|cmd| cmd.starts_with(prefix))
             .map(|cmd| CompletionPair {
                 display: cmd.to_string(),
                 replacement: format!("{} ", cmd)
             })
             .collect();
+        candidates.sort_by(|a, b| a.display.cmp(&b.display));
 
         Ok((start, candidates))
     }
