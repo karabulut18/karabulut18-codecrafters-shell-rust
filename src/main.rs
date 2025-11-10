@@ -386,6 +386,7 @@ fn run_command(input: &str){
 
         if error_in_parsing || command_args.is_empty()
         {
+            println!("error in parsing amk")
             return;
         }
 
@@ -577,7 +578,7 @@ fn execute_piped(
                     process_command.stdout(file);
                 }
                 Err(e) => {
-                    eprintln!("{}: {} ahmak", e, output_file);
+                    eprintln!("Failed to open error file: {}", e);
                     return None;
                 }
             }
