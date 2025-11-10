@@ -386,7 +386,7 @@ fn run_command(input: &str){
 
         if error_in_parsing || command_args.is_empty()
         {
-            println!("error in parsing amk")
+            println!("error in parsing amk");
             return;
         }
 
