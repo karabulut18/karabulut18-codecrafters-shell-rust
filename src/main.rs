@@ -1,5 +1,6 @@
 use std::io::{Write};
 use std::env;
+
 use std::path::PathBuf;
 use std::os::unix::fs::PermissionsExt;
 use std::fs::OpenOptions;
@@ -177,7 +178,8 @@ fn handle_built_in_output(std_out_s: &str, std_out: Option<String>, std_out_appe
 }
 
 // execute function
-// catch the output and print
+
+/*// catch the output and print
 fn execute(command: &str, args: &[&str], std_out: Option<String>, std_out_append: bool, std_err: Option<String>, std_err_append: bool)
 {
     if find_executable_in_path(command).is_some() {
@@ -235,7 +237,7 @@ fn execute(command: &str, args: &[&str], std_out: Option<String>, std_out_append
     } else {
         println!("{}: command not found", command);
     }
-}
+}*/
 
 fn change_directory(path: &str)
 {
@@ -327,174 +329,342 @@ fn arg_parse(line: &str) -> Vec<String> {
 
 fn run_command(input: &str){
 
-    let mut std_out_r_append = false;
-    let mut std_err_r_append = false;
+    let commands: Vec<&str> = input.split('|').collect();
 
-    let raw_args = arg_parse(&input.trim());
-    if raw_args.is_empty()
-    {
-        return;
+    let mut prev_output: Option<std::process::ChildStdout> = None;
+
+    for (ith_command, cmd_string) in commands.iter().enumerate(){
+        let raw_args = arg_parse(&cmd_string.trim());
+        if raw_args.is_empty()
+        {
+            return;
+        }
+
+        let mut std_out_r_append = false;
+        let mut std_err_r_append = false;
+
+        // detect if there is a redirect option in the command
+        let mut std_out_file: Option<String> = None;
+        let mut std_err_file: Option<String> = None;
+        let mut command_args: Vec<String> = Vec::new();
+        let mut error_in_parsing = false;
+
+
+        let mut i = 0;
+        while i < raw_args.len()
+        {
+            let arg = &raw_args[i];
+            if arg == ">" || arg == "1>"
+            {
+                i += 1;
+                if i >= raw_args.len()
+                {
+
+                    eprintln!("syntax error near unexpected token `>'");
+                    error_in_parsing = true;
+                    break;
+                }
+
+                std_out_file = Some(raw_args[i].clone());
+                i += 1;
+            }
+            else if arg == "2>"
+            {
+                i += 1;
+                if i >= raw_args.len()
+                {
+
+                    eprintln!("syntax error near unexpected token `>'");
+                    error_in_parsing = true;
+                    break;
+                }
+
+                std_err_file = Some(raw_args[i].clone());
+                i += 1;
+            }
+            else if arg == ">>" || arg == "1>>"
+            {
+                i += 1;
+                if i >= raw_args.len()
+                {
+                    eprintln!("syntax error near unexpected token `>'");
+                    error_in_parsing = true;
+                    break;
+                }
+                std_out_r_append = true;
+
+                std_out_file = Some(raw_args[i].clone());
+                i += 1;
+            }
+            else if arg == "2>>"
+            {
+                i += 1;
+                if i >= raw_args.len()
+                {
+
+                    eprintln!("syntax error near unexpected token `>'");
+                    error_in_parsing = true;
+                    break;
+                }
+                std_err_r_append = true;
+
+                std_err_file = Some(raw_args[i].clone());
+                i += 1;
+            }
+            else
+            {
+                command_args.push(arg.clone());
+                i += 1;
+            }
+        }
+
+        if error_in_parsing || command_args.is_empty()
+        {
+            return;
+        }
+
+        // ... (Execute logic) ...
+        let is_last = ith_command == commands.len() - 1;
+        
+        // Pass the previous command's stdout as the current command's stdin.
+        // Also, if it's not the last command, set up piping the current stdout.
+        let new_prev_output = run_single_command(
+            &raw_args,
+            prev_output.take(), // Take the previous output (it's now consumed as stdin)
+            std_out_file.clone(), // Redirects for the current command
+            std_out_r_append,
+            std_err_file.clone(),
+            std_err_r_append,
+            is_last,
+        );
+        
+        prev_output = new_prev_output;
     }
+}
 
-    // detect if there is a redirect option in the command
-    let mut std_out_file: Option<String> = None;
-    let mut std_err_file: Option<String> = None;
-    let mut command_args: Vec<String> = Vec::new();
-    let mut error_in_parsing = false;
 
-    let mut i = 0;
-    while i < raw_args.len()
-    {
-        let arg = &raw_args[i];
-        if arg == ">" || arg == "1>"
-        {
-            i += 1;
-            if i >= raw_args.len()
-            {
-
-                eprintln!("syntax error near unexpected token `>'");
-                error_in_parsing = true;
-                break;
-            }
-
-            std_out_file = Some(raw_args[i].clone());
-            i += 1;
-        }
-        else if arg == "2>"
-        {
-            i += 1;
-            if i >= raw_args.len()
-            {
-
-                eprintln!("syntax error near unexpected token `>'");
-                error_in_parsing = true;
-                break;
-            }
-
-            std_err_file = Some(raw_args[i].clone());
-            i += 1;
-        }
-        else if arg == ">>" || arg == "1>>"
-        {
-            i += 1;
-            if i >= raw_args.len()
-            {
-                eprintln!("syntax error near unexpected token `>'");
-                error_in_parsing = true;
-                break;
-            }
-            std_out_r_append = true;
-
-            std_out_file = Some(raw_args[i].clone());
-            i += 1;
-        }
-        else if arg == "2>>"
-        {
-            i += 1;
-            if i >= raw_args.len()
-            {
-
-                eprintln!("syntax error near unexpected token `>'");
-                error_in_parsing = true;
-                break;
-            }
-            std_err_r_append = true;
-
-            std_err_file = Some(raw_args[i].clone());
-            i += 1;
-        }
-        else
-        {
-            command_args.push(arg.clone());
-            i += 1;
-        }
-    }
-
-    if error_in_parsing || command_args.is_empty()
-    {
-        return;
-    }
-
+fn run_single_command(
+    command_args: &[String],
+    stdin_pipe: Option<std::process::ChildStdout>, // The stdin for this command
+    std_out_file: Option<String>,
+    std_out_r_append: bool,
+    std_err_file: Option<String>,
+    std_err_r_append: bool,
+    is_last: bool, // True if this is the last command in the pipeline
+) -> Option<std::process::ChildStdout>{
 
     let command = command_args[0].as_str();
-
-
     // Map the rest of the arguments from &String to &str and collect them
     let parts: Vec<&str> = command_args[1..].iter().map(|s| s.as_str()).collect();
     match command
     {
-        "exit" =>
-        {
-            if let Some(arg) = parts.get(0)
-            {
-                if let Ok(exit_code) = arg.parse::<i32>()
+
+        "echo" | "pwd" | "type" => {
+
+            if !is_last {
+                eprintln!("Built-in command '{}' in a pipe: Not supported.", command);
+                    return None;
+            }
+            
+            match command {
+                "echo" =>
                 {
-                    std::process::exit(exit_code);
+                    let std_out_s = parts.join(" ");
+                    let std_err_s = "";
+                    handle_built_in_output(&std_out_s, std_out_file,std_out_r_append, std_err_s, std_err_file, std_err_r_append);
                 }
-                else
+                "pwd" =>
                 {
-                    std::process::exit(1);
+                    if let Ok(current_dir) = env::current_dir()
+                    {
+                        let std_out_s = current_dir.to_str().unwrap().to_string();
+                        handle_built_in_output(&std_out_s, std_out_file, std_out_r_append, "", std_err_file, std_err_r_append);
+                    }
+                    else
+                    {
+                        let std_err_s = "Failed to get current directory";
+                        handle_built_in_output("", std_out_file, std_out_r_append, std_err_s,std_err_file, std_err_r_append);
+                    }
+                }
+                "type" =>
+                {
+                    if let Some(arg) = parts.get(0)
+                    {
+                        let mut std_out_s = String::new();
+                        let mut std_err_s = String::new();
+                        if  matches!(*arg, "echo" | "exit" | "type" | "pwd" | "cd")
+                        {
+                            std_out_s = format!("{} is a shell builtin", arg)
+                        }
+                        else if let Some(path) = find_executable_in_path(arg)
+                        {
+                            std_out_s = format!("{} is {}", arg, path.display())
+                        }
+                        else
+                        {
+                            std_err_s = format!("{} not found", arg)
+                        };
+                        handle_built_in_output(&std_out_s, std_out_file, std_out_r_append,&std_err_s, std_err_file, std_err_r_append);
+                    };
+                }
+                _ => {
+                    return None;
                 }
             }
-            else
-            {
-                std::process::exit(0);
-            }
+            None
         }
-        "echo" =>
+        "exit" |"cd" =>
         {
-            let std_out_s = parts.join(" ");
-            let std_err_s = "";
-            handle_built_in_output(&std_out_s, std_out_file,std_out_r_append, std_err_s, std_err_file, std_err_r_append);
-        }
-        "pwd" =>
-        {
-            if let Ok(current_dir) = env::current_dir()
+            if stdin_pipe.is_none()
             {
-                let std_out_s = current_dir.to_str().unwrap().to_string();
-                handle_built_in_output(&std_out_s, std_out_file, std_out_r_append, "", std_err_file, std_err_r_append);
+                
+                match command{
+                    "cd" =>
+                    {
+                        if let Some(arg) = parts.get(0)
+                        {
+                            change_directory(arg);
+                        }
+                    }
+                    "exit" =>
+                    {
+                        if let Some(arg) = parts.get(0)
+                        {
+                            if let Ok(exit_code) = arg.parse::<i32>()
+                            {
+                                std::process::exit(exit_code);
+                            }
+                            else
+                            {
+                                std::process::exit(1);
+                            }
+                        }
+                        else
+                        {
+                            std::process::exit(0);
+                        }
+                    }
+                    _ => {
+                        return None;
+                    }
+                }   
             }
-            else
-            {
-                let std_err_s = "Failed to get current directory";
-                handle_built_in_output("", std_out_file, std_out_r_append, std_err_s,std_err_file, std_err_r_append);
-            }
-        }
-        "cd" =>
-        {
-            if let Some(arg) = parts.get(0)
-            {
-                change_directory(arg);
-            }
-        }
-        "type" =>
-        {
-            if let Some(arg) = parts.get(0)
-            {
-                let mut std_out_s = String::new();
-                let mut std_err_s = String::new();
-                if  matches!(*arg, "echo" | "exit" | "type" | "pwd" | "cd")
-                {
-                    std_out_s = format!("{} is a shell builtin", arg)
-                }
-                else if let Some(path) = find_executable_in_path(arg)
-                {
-                    std_out_s = format!("{} is {}", arg, path.display())
-                }
-                else
-                {
-                    std_err_s = format!("{} not found", arg)
-                };
-                handle_built_in_output(&std_out_s, std_out_file, std_out_r_append,&std_err_s, std_err_file, std_err_r_append);
-            };
+            None
         }
         _ =>
         {
-            // parts is &[&str] which matches the execute function signature
-            execute(command, &parts, std_out_file, std_out_r_append, std_err_file, std_err_r_append);
+            execute_piped(
+                command, 
+                &parts, 
+                stdin_pipe, 
+                std_out_file, 
+                std_out_r_append, 
+                std_err_file, 
+                std_err_r_append,
+                !is_last, // Pipe the output if it's NOT the last command
+            )
         }
     }
 }
+
+// The execution function is updated to handle pipes
+fn execute_piped(
+    command: &str, 
+    args: &[&str], 
+    mut stdin_pipe: Option<std::process::ChildStdout>, // Input from previous pipe
+    std_out: Option<String>, 
+    std_out_append: bool, 
+    std_err: Option<String>, 
+    std_err_append: bool,
+    create_pipe: bool, // True if output should be piped to the next command
+) -> Option<std::process::ChildStdout>
+{
+    if find_executable_in_path(command).is_none() {
+        println!("{}: command not found", command);
+        return None;
+    }
+    
+    let mut process_command = std::process::Command::new(command);
+    process_command.args(args);
+    
+    // --- STDIN Handling (The Pipe Input) ---
+    if let Some(pipe) = stdin_pipe.take() {
+        // Set the current command's stdin to the previous command's stdout
+        process_command.stdin(pipe);
+    }
+
+    // --- STDOUT Handling (The Pipe Output or File Redirect) ---
+    let mut pipe_output = None;
+    if create_pipe {
+        // If we need to pipe, use Stdio::piped() to capture the output
+        process_command.stdout(std::process::Stdio::piped());
+    } else if let Some(output_file) = std_out {
+        // Otherwise, if there is a file redirect, handle that (as you did before)
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .append(std_out_append)
+            .create(true)
+            .truncate(!std_out_append)
+            .open(&output_file)
+            {
+                Ok(file) => {
+                    process_command.stdout(file);
+                }
+                Err(e) => {
+                    eprintln!("Failed to open output file: {}", e);
+                    return None;
+                }
+            }
+    }
+
+    // --- STDERR Handling (File Redirect Only) ---
+    if let Some(error_file) = std_err {
+        // (Your existing error redirection logic)
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .append(std_err_append)
+            .create(true)
+            .truncate(!std_err_append)
+            .open(&error_file)
+            {
+                Ok(file) => {
+                    process_command.stderr(file);
+                }
+                Err(e) => {
+                    eprintln!("Failed to open error file: {}", e);
+                    return None;
+                }
+            }
+    }
+
+    // --- Spawn and Return Output Pipe ---
+    match process_command.spawn() {
+        Ok(mut child) => {
+            // If output was piped, take and return the ChildStdout handle
+            if create_pipe {
+                pipe_output = child.stdout.take();
+            }
+            
+            // IMPORTANT: If this is the final command (create_pipe=false),
+            // you must wait for it to finish. If it's not the final command,
+            // the subsequent `spawn` will implicitly wait via the pipe.
+            if !create_pipe && stdin_pipe.is_none() {
+                // If it's a standalone command, wait for it
+                match child.wait() {
+                    Ok(_) => {},
+                    Err(e) => eprintln!("Execution error: {}", e),
+                }
+            }
+            
+            pipe_output
+        }
+        Err(e) => {
+            eprintln!("Failed to execute {}: {}", command, e);
+            None
+        }
+    }
+}
+
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> 
 {
