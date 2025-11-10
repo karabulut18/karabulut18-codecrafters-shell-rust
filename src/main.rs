@@ -577,7 +577,7 @@ fn execute_piped(
                     process_command.stdout(file);
                 }
                 Err(e) => {
-                    eprintln!("{}: {}", e, output_file);
+                    eprintln!("{}: {} ahmak", e, output_file);
                     return None;
                 }
             }
