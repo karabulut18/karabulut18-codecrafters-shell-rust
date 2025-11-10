@@ -412,7 +412,7 @@ fn run_command(input: &str){
         // Pass the previous command's stdout as the current command's stdin.
         // Also, if it's not the last command, set up piping the current stdout.
         let new_prev_output = run_single_command(
-            &raw_args,
+            &command_args,
             prev_output.take(), // Take the previous output (it's now consumed as stdin)
             std_out_file.clone(), // Redirects for the current command
             std_out_r_append,
