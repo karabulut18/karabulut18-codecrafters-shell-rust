@@ -376,6 +376,22 @@ fn run_command(input: &str){
         
                 i += 1; // Move past the filename for the NEXT loop iteration
             }
+            else if arg == ">" || arg == "1>" || arg == "2>" // Check for all redirection tokens
+            {
+                i += 1; // Move past the redirection operator
+                if i >= raw_args.len() {
+                    error_in_parsing = true;                   
+                    break;
+                }
+                if arg == "2>" {
+                    std_err_file = Some(raw_args[i].clone());
+                    std_err_r_append = false;
+                } else {
+                    std_out_file = Some(raw_args[i].clone());
+                    std_out_r_append = false;
+                }
+                i += 1; // Move past the filename for the NEXT loop iteration
+            }
             else
             {
                 // This is a normal command argument, so it is added.
