@@ -354,7 +354,6 @@ fn run_command(input: &str){
         while i < raw_args.len()
         {
             let arg = &raw_args[i];
-            let arg = &raw_args[i];
     
             // This block correctly identifies the redirection and consumes the token AND the filename
             if arg == ">>" || arg == "1>>" || arg == "2>>" // Check for all redirection tokens
@@ -578,7 +577,7 @@ fn execute_piped(
                     process_command.stdout(file);
                 }
                 Err(e) => {
-                    eprintln!("Failed to open output file: {}", e);
+                    eprintln!("{}: {}", e, output_file);
                     return None;
                 }
             }
