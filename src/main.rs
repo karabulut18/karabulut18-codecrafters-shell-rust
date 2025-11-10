@@ -354,65 +354,32 @@ fn run_command(input: &str){
         while i < raw_args.len()
         {
             let arg = &raw_args[i];
-            if arg == ">" || arg == "1>"
+            let arg = &raw_args[i];
+    
+            // This block correctly identifies the redirection and consumes the token AND the filename
+            if arg == ">>" || arg == "1>>" || arg == "2>>" // Check for all redirection tokens
             {
-                i += 1;
-                if i >= raw_args.len()
-                {
-
-                    eprintln!("syntax error near unexpected token `>'");
-                    error_in_parsing = true;
+                i += 1; // Move past the redirection operator
+                if i >= raw_args.len() {
+                    error_in_parsing = true;                   
                     break;
                 }
-
-                std_out_file = Some(raw_args[i].clone());
-                i += 1;
-            }
-            else if arg == "2>"
-            {
-                i += 1;
-                if i >= raw_args.len()
-                {
-
-                    eprintln!("syntax error near unexpected token `>'");
-                    error_in_parsing = true;
-                    break;
+                
+                // **CRITICAL:** Here you consume the filename, but you DO NOT push the filename
+                // or the '>>' token to 'command_args'.
+                if arg == "2>>" {
+                     std_err_r_append = true;
+                     std_err_file = Some(raw_args[i].clone());
+                } else {
+                     std_out_r_append = true;
+                     std_out_file = Some(raw_args[i].clone());
                 }
-
-                std_err_file = Some(raw_args[i].clone());
-                i += 1;
-            }
-            else if arg == ">>" || arg == "1>>"
-            {
-                i += 1;
-                if i >= raw_args.len()
-                {
-                    eprintln!("syntax error near unexpected token `>'");
-                    error_in_parsing = true;
-                    break;
-                }
-                std_out_r_append = true;
-
-                std_out_file = Some(raw_args[i].clone());
-                i += 1;
-            }
-            else if arg == "2>>"
-            {
-                i += 1;
-                if i >= raw_args.len()
-                {
-
-                    eprintln!("syntax error near unexpected token `>'");
-                    error_in_parsing = true;
-                    break;
-                }
-                std_err_r_append = true;
-
-                std_err_file = Some(raw_args[i].clone());
-                i += 1;
+        
+                i += 1; // Move past the filename for the NEXT loop iteration
             }
             else
             {
+                // This is a normal command argument, so it is added.
                 command_args.push(arg.clone());
                 i += 1;
             }
