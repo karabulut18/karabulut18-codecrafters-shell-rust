@@ -452,13 +452,25 @@ fn run_single_command(
                 }
                 "history" =>
                 {
+                    let mut limit = 15;
+    
+                    if let Some(arg) = parts.get(0)
+                    {
+                        if let Ok(num) = arg.parse::<usize>()
+                        {
+                            limit = num;
+                        }
+                    }
+
                     let rl = RL.lock().unwrap();
                     let history = rl.history();
                     if !history.is_empty()
                     {
+                        let start_index = history.len().saturating_sub(limit);
                         std_out_s = history.iter()
+                                    .skip(start_index)
                                     .enumerate()
-                                    .map(|(i, entry)| format!("{} {}", i + 1, entry))
+                                    .map(|(i, entry)| format!("{} {}", start_index + i + 1, entry))
                                     .collect::<Vec<String>>()
                                     .join("\n");
                         std_out_s.push('\n');
