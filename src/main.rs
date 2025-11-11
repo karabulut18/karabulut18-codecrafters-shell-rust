@@ -136,10 +136,8 @@ fn handle_built_in_output(std_out_s: &str, std_out: Option<String>, std_out_appe
         match OpenOptions::new().write(true).append(std_out_append).create(true).truncate(!std_out_append).open(&file_path) {
             Ok(mut file) => {
                 // Write the output string and a newline in one operation
-                if !std_out_s.is_empty() {
-                    if let Err(e) = writeln!(file, "{}", std_out_s) {
-                        eprintln!("Error writing to file {}: {}", file_path, e);
-                    }
+                if !std_out_s.is_empty() && write!(file, "{}", std_out_s).is_err() {
+                    eprintln!("Error writing to file {}", file_path);
                 }
             }
             Err(e) => {
@@ -149,7 +147,7 @@ fn handle_built_in_output(std_out_s: &str, std_out: Option<String>, std_out_appe
     } else {
         // No redirection, print to standard output
         if !std_out_s.is_empty() {
-            println!("{}", std_out_s);
+            print!("{}", std_out_s);
         }
     }
 
@@ -159,7 +157,7 @@ fn handle_built_in_output(std_out_s: &str, std_out: Option<String>, std_out_appe
                 // Write the error string and a newline in one operation
                 if !std_err_s.is_empty()
                 {
-                    if let Err(e) = writeln!(file, "{}", std_err_s) {
+                    if let Err(e) = write!(file, "{}", std_err_s) {
                         eprintln!("Error writing to file {}: {}", file_path, e);
                     }
                 }
@@ -172,72 +170,11 @@ fn handle_built_in_output(std_out_s: &str, std_out: Option<String>, std_out_appe
         // No redirection, print to standard error
         if !std_err_s.is_empty()
         {
-            eprintln!("{}", std_err_s);
+            eprint!("{}", std_err_s);
         }
     }
 }
 
-// execute function
-
-/*// catch the output and print
-fn execute(command: &str, args: &[&str], std_out: Option<String>, std_out_append: bool, std_err: Option<String>, std_err_append: bool)
-{
-    if find_executable_in_path(command).is_some() {
-
-        let mut process_command = std::process::Command::new(command);
-        process_command.args(args);
-        if let Some(output_file) = std_out {
-            match std::fs::OpenOptions::new()
-                .write(true)
-                .append(std_out_append)
-                .create(true)
-                .truncate(!std_out_append)
-                .open(&output_file)
-                {
-                    Ok(file) =>
-                    {
-                        process_command.stdout(file);
-                    }
-                    Err(e) =>
-                    {
-                        eprintln!("Failed to open output file: {}", e);
-                    }
-                
-                }
-        }
-        if let Some(error_file) = std_err {
-            match std::fs::OpenOptions::new()
-                .write(true)
-                .append(std_err_append)
-                .create(true)
-                .truncate(!std_err_append)
-                .open(&error_file)
-                {
-                    Ok(file) =>
-                    {
-                        process_command.stderr(file);
-                    }
-                    Err(e) =>
-                    {
-                        eprintln!("Failed to open error file: {}", e);
-                    }
-                }
-        }
-
-        match process_command.spawn() {
-            Ok(mut child) => {
-                // Wait for the command to finish and capture its exit status
-                match child.wait() {
-                    Ok(_) => {},
-                    Err(e) => eprintln!("Execution error: {}", e),
-                }
-            }
-            Err(e) => eprintln!("Failed to execute {}: {}", command, e),
-        }
-    } else {
-        println!("{}: command not found", command);
-    }
-}*/
 
 fn change_directory(path: &str)
 {
@@ -441,60 +378,69 @@ fn run_single_command(
     let parts: Vec<&str> = command_args[1..].iter().map(|s| s.as_str()).collect();
     match command
     {
-
         "echo" | "pwd" | "type" => {
-
-            if !is_last {
-                eprintln!("Built-in command '{}' in a pipe: Not supported.", command);
-                    return None;
-            }
-            
+            let mut std_out_s = String::new();
+            let mut std_err_s = String::new();
             match command {
                 "echo" =>
                 {
-                    let std_out_s = parts.join(" ");
-                    let std_err_s = "";
-                    handle_built_in_output(&std_out_s, std_out_file,std_out_r_append, std_err_s, std_err_file, std_err_r_append);
+                    std_out_s = format!("{}\n", parts.join(" "));
+                    std_err_s = "".to_string();
+                    //handle_built_in_output(&std_out_s, std_out_file,std_out_r_append, std_err_s, std_err_file, std_err_r_append);
                 }
                 "pwd" =>
                 {
                     if let Ok(current_dir) = env::current_dir()
                     {
-                        let std_out_s = current_dir.to_str().unwrap().to_string();
-                        handle_built_in_output(&std_out_s, std_out_file, std_out_r_append, "", std_err_file, std_err_r_append);
+                        std_out_s = format!("{}\n", current_dir.to_str().unwrap());
+                        std_err_s = "".to_string();
+                        //handle_built_in_output(&std_out_s, std_out_file, std_out_r_append, "", std_err_file, std_err_r_append);
                     }
                     else
                     {
-                        let std_err_s = "Failed to get current directory";
-                        handle_built_in_output("", std_out_file, std_out_r_append, std_err_s,std_err_file, std_err_r_append);
+                        std_err_s = "Failed to get current directory\n".to_string();
+                        std_out_s = "".to_string();
+                        //handle_built_in_output("", std_out_file, std_out_r_append, std_err_s,std_err_file, std_err_r_append);
                     }
                 }
                 "type" =>
                 {
                     if let Some(arg) = parts.get(0)
                     {
-                        let mut std_out_s = String::new();
-                        let mut std_err_s = String::new();
                         if  matches!(*arg, "echo" | "exit" | "type" | "pwd" | "cd")
                         {
-                            std_out_s = format!("{} is a shell builtin", arg)
+                            std_out_s = format!("{} is a shell builtin\n", arg)
                         }
                         else if let Some(path) = find_executable_in_path(arg)
                         {
-                            std_out_s = format!("{} is {}", arg, path.display())
+                            std_out_s = format!("{} is {}\n", arg, path.display())
                         }
                         else
                         {
-                            std_err_s = format!("{} not found", arg)
+                            std_err_s = format!("{} not found\n", arg)
                         };
-                        handle_built_in_output(&std_out_s, std_out_file, std_out_r_append,&std_err_s, std_err_file, std_err_r_append);
                     };
                 }
                 _ => {
                     return None;
                 }
             }
-            None
+            if is_last
+            {
+                handle_built_in_output(&std_out_s, std_out_file, std_out_r_append,&std_err_s, std_err_file, std_err_r_append);
+                None
+            }
+            else {
+                return execute_piped("printf", 
+                &["%s", &std_out_s], 
+                stdin_pipe, 
+                None, 
+                false,
+                None, 
+                false, 
+                true)
+            }
+            
         }
         "exit" |"cd" =>
         {
