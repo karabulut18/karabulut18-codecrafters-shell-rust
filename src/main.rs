@@ -453,12 +453,28 @@ fn run_single_command(
                 "history" =>
                 {
                     let mut limit = 15;
-    
+
                     if let Some(arg) = parts.get(0)
-                    {
-                        if let Ok(num) = arg.parse::<usize>()
+                    { 
+                        if arg == &"-r"
                         {
-                            limit = num;
+                            if let Some(file_path_str) = parts.get(1) {
+                                let file_path = PathBuf::from(file_path_str);
+                                let mut rl = RL.lock().unwrap();
+                                let _ = rl.load_history(&file_path);
+                                return None;
+                            } else {
+                                std_err_s = "history: option requires an argument -- 'r'\nhistory: usage: history [-r] [filename]\n".to_string();
+                            }
+                        }
+                        else {
+                            if let Ok(num) = arg.parse::<usize>()
+                            {
+                                limit = num;
+                            }
+                            else {
+                                std_err_s = format!("history: invalid argument '{}'\n", arg);
+                            }  
                         }
                     }
 
