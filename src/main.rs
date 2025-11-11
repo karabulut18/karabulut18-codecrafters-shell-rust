@@ -4,6 +4,9 @@ use std::env;
 use std::path::PathBuf;
 use std::os::unix::fs::PermissionsExt;
 use std::fs::OpenOptions;
+use std::sync::Mutex;
+
+use lazy_static::lazy_static;
 
 use rustyline::config::{CompletionType, Config, BellStyle};
 use rustyline::error::ReadlineError;
@@ -14,7 +17,33 @@ use rustyline::hint::Hinter;
 use rustyline::validate::Validator;
 use rustyline::{Result, Context, Helper};
 
-const BUILTINS: &[&str] = &["echo", "exit", "type", "pwd", "cd"];
+const BUILTINS: &[&str] = &["echo", "exit", "type", "pwd", "cd", "history"];
+
+lazy_static! {
+    static ref HISTORY_PATH: Option<PathBuf> = env::var("HOME").ok().map(|home| PathBuf::from(home).join(".sh_history"));
+    static ref RL: Mutex<Editor<ShellHelper>> = {
+        let config = Config::builder().completion_type(CompletionType::List).bell_style(BellStyle::Audible).build();
+        let mut all_commands = get_executables_in_path();
+        for builtin in BUILTINS {
+            if !all_commands.contains(&builtin.to_string()) {
+                all_commands.push(builtin.to_string());
+            }
+        }
+        let helper = ShellHelper { all_commands };
+        let mut rl = Editor::<ShellHelper>::with_config(config).unwrap();
+        rl.set_helper(Some(helper));
+
+        if let Some(ref path) = *HISTORY_PATH {
+            if path.exists() {
+                // Ignore errors on load, e.g., new or corrupt file
+                let _ = rl.load_history(path);
+            }
+        }
+        Mutex::new(rl)
+    };
+}
+
+
 
 #[derive(Default)]
 struct ShellHelper{
@@ -378,7 +407,7 @@ fn run_single_command(
     let parts: Vec<&str> = command_args[1..].iter().map(|s| s.as_str()).collect();
     match command
     {
-        "echo" | "pwd" | "type" => {
+        "echo" | "pwd" | "type" | "history" => {
             let mut std_out_s = String::new();
             let mut std_err_s = String::new();
             match command {
@@ -407,7 +436,7 @@ fn run_single_command(
                 {
                     if let Some(arg) = parts.get(0)
                     {
-                        if  matches!(*arg, "echo" | "exit" | "type" | "pwd" | "cd")
+                        if  matches!(*arg, "echo" | "exit" | "type" | "pwd" | "cd" | "history")
                         {
                             std_out_s = format!("{} is a shell builtin\n", arg)
                         }
@@ -420,6 +449,20 @@ fn run_single_command(
                             std_err_s = format!("{} not found\n", arg)
                         };
                     };
+                }
+                "history" =>
+                {
+                    let rl = RL.lock().unwrap();
+                    let history = rl.history();
+                    if !history.is_empty()
+                    {
+                        std_out_s = history.iter()
+                                    .enumerate()
+                                    .map(|(i, entry)| format!("{} {}", i + 1, entry))
+                                    .collect::<Vec<String>>()
+                                    .join("\n");
+                        std_out_s.push('\n');
+                    }
                 }
                 _ => {
                     return None;
@@ -457,6 +500,13 @@ fn run_single_command(
                     }
                     "exit" =>
                     {
+                        let mut rl = RL.lock().unwrap();
+                        if let Some(path) = &*HISTORY_PATH {
+                            if let Err(e) = rl.save_history(path) {
+                                eprintln!("Error writing history: {}", e);
+                            }
+                        };
+    
                         if let Some(arg) = parts.get(0)
                         {
                             if let Ok(exit_code) = arg.parse::<i32>()
@@ -597,41 +647,35 @@ fn execute_piped(
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> 
 {
-    let config = Config::builder().completion_type(CompletionType::List).bell_style(BellStyle::Audible).build();
-    let mut all_commands = get_executables_in_path();
-
-    for builtin in BUILTINS
-    {
-        if !all_commands.contains(&builtin.to_string())
-        {
-            all_commands.push(builtin.to_string());
-        }
-    }
-
     let prompt = "$ ";
-    let helper = ShellHelper{ all_commands };
-    let mut rl = Editor::<ShellHelper>::with_config(config)?;
-    rl.set_helper(Some(helper));
-
     loop
     {
+        let mut rl = RL.lock().unwrap();
         let readline = rl.readline(prompt);
         match readline {
             Ok(line) => {
-                // Add command to history (Enables up/down arrows immediately)
-                rl.add_history_entry(line.as_str());
-                
-                // Execute command
+                // Add non-empty commands to history
+                if !line.trim().is_empty() {
+                    rl.add_history_entry(line.as_str());
+                }
+                // Release the lock before executing the command to prevent deadlocks
+                drop(rl);
+
                 run_command(&line);
             },
             Err(ReadlineError::Interrupted) => {
                 // Ctrl-C
-                println!("^C");
                 continue;
             },
             Err(ReadlineError::Eof) => {
                 // Ctrl-D
                 println!("exit");
+                let mut rl = RL.lock().unwrap();
+                if let Some(ref path) = *HISTORY_PATH {
+                    if let Err(why) = rl.save_history(path) {
+                        eprintln!("Error writing history: {}", why);
+                    }
+                }
                 break;
             },
             Err(err) => {
