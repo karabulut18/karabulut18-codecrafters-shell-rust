@@ -8,7 +8,7 @@ use std::sync::Mutex;
 
 use lazy_static::lazy_static;
 
-use rustyline::config::{CompletionType, Config, BellStyle};
+use rustyline::config::{BellStyle, CompletionType, Config, Configurer};
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 use rustyline::completion::{Completer, Pair as CompletionPair};
@@ -39,6 +39,7 @@ lazy_static! {
                 let _ = rl.load_history(path);
             }
         }
+        rl.set_history_ignore_space(true);
         Mutex::new(rl)
     };
 }
