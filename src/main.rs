@@ -1,7 +1,7 @@
 use std::io::{Write};
 use std::env;
 
-use std::path::PathBuf;
+use std::path::{PathBuf};
 use std::os::unix::fs::PermissionsExt;
 use std::fs::OpenOptions;
 use std::sync::Mutex;
@@ -465,6 +465,17 @@ fn run_single_command(
                                 return None;
                             } else {
                                 std_err_s = "history: option requires an argument -- 'r'\nhistory: usage: history [-r] [filename]\n".to_string();
+                            }
+                        }
+                        else if arg == &"-w"
+                        {
+                            if let Some(file_path_str) = parts.get(1) {
+                                let file_path = PathBuf::from(file_path_str);
+                                let mut rl = RL.lock().unwrap();
+                                let _ = rl.save_history(&file_path);
+                                return None;
+                            } else {
+                                std_err_s = "history: option requires an argument -- 'w'\nhistory: usage: history [-w] [filename]\n".to_string();
                             }
                         }
                         else {
