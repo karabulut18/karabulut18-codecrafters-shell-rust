@@ -61,10 +61,29 @@ impl Shell {
 
     fn save_history(&mut self, path: &PathBuf) -> Result<()> {
 
-        print!("Saving history to {}...", path.display());
         let history = self.editor.history();
-        
         match OpenOptions::new().write(true).create(true).truncate(true).open(&path) {
+            Ok(mut file) => {
+                for entry in history {
+                    if entry.starts_with("#") {
+                        continue;
+                    }
+                    if let Err(e) = writeln!(file, "{}", entry) {
+                        eprintln!("Error writing to file {}: {}", path.display(), e);
+                    }
+                }
+                Ok(())
+            }
+            Err(e) => {
+                eprintln!("Error opening file {}: {}", path.display(), e);
+                Err(rustyline::error::ReadlineError::Io(e))
+            }
+        }
+    }
+    fn append_history(&mut self, path: &PathBuf) -> Result<()> {
+    
+        let history = self.editor.history();
+        match OpenOptions::new().write(true).create(true).truncate(false).append(true).open(&path) {
             Ok(mut file) => {
                 for entry in history {
                     if entry.starts_with("#") {
@@ -556,6 +575,15 @@ fn run_single_command(
                             } else {
                                 std_err_s = "history: option requires an argument -- 'r'\nhistory: usage: history [-r] [filename]\n".to_string();
                             }
+                        }
+                        else if arg == &"-a"
+                        {
+                            if let Some(file_path_str) = parts.get(1) {
+                                let file_path = PathBuf::from(file_path_str);
+                                let _ = shell.append_history(&file_path);
+                                return None;
+                            }
+                            return None;
                         }
                         else {
                             if let Ok(num) = arg.parse::<usize>()
