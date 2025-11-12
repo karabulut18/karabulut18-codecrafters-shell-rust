@@ -14,8 +14,6 @@ use rustyline::hint::Hinter;
 use rustyline::validate::Validator;
 use rustyline::{Result, Context, Helper};
 
-use std::io::{BufRead, BufReader};
-
 
 const BUILTINS: &[&str] = &["echo", "exit", "type", "pwd", "cd", "history"];
 const HISTORY_FILENAME: &str = ".sh_history";
@@ -47,6 +45,7 @@ impl Shell {
         rl.set_history_ignore_dups(true); 
         rl.set_history_ignore_space(true);
 
+        /*For now do not load the history 
         // Load history from HOME directory if it exists
         if let Some(path) = Self::history_path() {
             if path.exists() {
@@ -54,7 +53,8 @@ impl Shell {
                 let _ = rl.load_history(&path);
             }
         }
-
+        */
+        
         Shell { editor: rl }
     }
             /// Gets the default history file path in the user's home directory.
@@ -92,7 +92,7 @@ impl Shell {
         match OpenOptions::new()
             .write(true)
             .create(true)
-            .append(true) // Crucial: ensures new data is added to the end.
+            .append(true)
             .open(path) 
         {
             Ok(mut file) => {
