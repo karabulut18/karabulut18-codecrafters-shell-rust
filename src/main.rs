@@ -85,45 +85,8 @@ impl Shell {
     }
 
     fn append_history(&mut self, path: &PathBuf) -> Result<()> {
-    
-        // 1. Count the number of history entries already present in the file.
-        // This number is the index where we must start appending the in-memory history.
-        let lines_in_file = if path.exists() {
-            match std::fs::File::open(path) {
-                Ok(file) => {
-                    let reader = BufReader::new(file);
-                    
-                    // Count lines, skipping rustyline metadata (like #V2) or comments
-                    reader.lines()
-                          .filter_map(|l| l.ok())
-                          .filter(|l| !l.starts_with('#'))
-                          .filter(|l| !l.trim().is_empty())
-                          .count()
-                }
-                Err(e) => {
-                    // If we can't read the file, assume 0 lines and attempt to append everything.
-                    // This might cause duplicates if the file exists but is unreadable, 
-                    // but it prevents data loss.
-                    eprintln!("Error reading history file {}: {}", path.display(), e);
-                    0
-                }
-            }
-        } else {
-            // File does not exist yet.
-            0
-        };
-    
+        let _ = self.editor.load_history(path);
         let history = self.editor.history();
-        let history_len = history.len();
-        
-        // The index to start iterating in the in-memory history.
-        let start_index = lines_in_file; 
-        let new_entries_to_write = history_len.saturating_sub(lines_in_file);
-    
-        if new_entries_to_write == 0 {
-            // History file size matches the in-memory history size, nothing to do.
-            return Ok(());
-        }
         
         // 2. Open the file in **append mode**.
         match OpenOptions::new()
@@ -135,7 +98,7 @@ impl Shell {
             Ok(mut file) => {
                 // 3. Iterate over in-memory history, skipping the entries already present in the file.
                 // This is the idiomatic way to achieve the check: if i >= start_index
-                for entry in history.iter().skip(start_index) {
+                for entry in history.iter(){
                     if let Err(e) = writeln!(file, "{}", entry) {
                         eprintln!("Error writing to history file {}: {}", path.display(), e);
                         // Return error if writing fails
