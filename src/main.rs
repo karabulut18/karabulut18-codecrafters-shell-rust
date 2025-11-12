@@ -1,14 +1,14 @@
 use std::io::{Write};
 use std::env;
 
-use std::path::{PathBuf};
+use std::path::PathBuf;
 use std::os::unix::fs::PermissionsExt;
 use std::fs::OpenOptions;
 use std::sync::Mutex;
 
 use lazy_static::lazy_static;
-
-use rustyline::config::{BellStyle, CompletionType, Config, Configurer};
+use rustyline::config::Configurer;
+use rustyline::config::{CompletionType, Config, BellStyle};
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 use rustyline::completion::{Completer, Pair as CompletionPair};
@@ -32,6 +32,9 @@ lazy_static! {
         let helper = ShellHelper { all_commands };
         let mut rl = Editor::<ShellHelper>::with_config(config).unwrap();
         rl.set_helper(Some(helper));
+        rl.set_history_ignore_space(true); 
+
+
 
         if let Some(ref path) = *HISTORY_PATH {
             if path.exists() {
@@ -39,11 +42,9 @@ lazy_static! {
                 let _ = rl.load_history(path);
             }
         }
-        rl.set_history_ignore_space(true);
         Mutex::new(rl)
     };
 }
-
 
 
 #[derive(Default)]
@@ -476,7 +477,7 @@ fn run_single_command(
                                 let _ = rl.save_history(&file_path);
                                 return None;
                             } else {
-                                std_err_s = "history: option requires an argument -- 'w'\nhistory: usage: history [-w] [filename]\n".to_string();
+                                std_err_s = "history: option requires an argument -- 'r'\nhistory: usage: history [-r] [filename]\n".to_string();
                             }
                         }
                         else {
