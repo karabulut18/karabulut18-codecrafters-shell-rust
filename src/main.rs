@@ -113,7 +113,7 @@ impl Shell {
         let history = self.editor.history();
         let history_len = history.len();
 
-        let new_entries_to_write = history_len.saturating_sub(lines_in_file);
+        let new_entries_to_write = history_len - lines_in_file -2;
         if new_entries_to_write == 0
         {
             return Ok(());
@@ -124,12 +124,13 @@ impl Shell {
         match OpenOptions::new().write(true).create(true).truncate(false).append(true).open(&path) {
             Ok(mut file) => {
                 for (i,entry) in history.iter().enumerate(){
-                    if i < start_index {
-                        continue;
-                    }
                     if entry.starts_with("#") {
                         continue;
                     }
+                    if i < start_index {
+                        continue;
+                    }
+
                     if let Err(e) = writeln!(file, "{}", entry) {
                         eprintln!("Error writing to file {}: {}", path.display(), e);
                     }
