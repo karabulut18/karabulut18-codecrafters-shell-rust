@@ -15,7 +15,6 @@ use rustyline::validate::Validator;
 use rustyline::{Result, Context, Helper};
 
 use std::io::{BufRead, BufReader};
-use std::collections::HashSet;
 
 
 const BUILTINS: &[&str] = &["echo", "exit", "type", "pwd", "cd", "history"];
@@ -87,33 +86,42 @@ impl Shell {
 
     fn append_history(&mut self, path: &PathBuf) -> Result<()> {
 
-        let mut existing_entries: HashSet<String> = HashSet::new();
 
-        if path.exists() {
+
+        let lines_in_file = if path.exists()
+        {
             match std::fs::File::open(path) {
                 Ok(file) => {
                     let reader = BufReader::new(file);
-                    for line in reader.lines().filter_map(|l| l.ok()) {
-                        if !line.trim().is_empty() && !line.starts_with('#') {
-                            existing_entries.insert(line);
-                        }
-                    }
+                    reader.lines()
+                    .filter_map(|l| l.ok())
+                    .filter(|l| !l.starts_with("#"))
+                    .count()
                 }
                 Err(e) =>
                 {
-                    eprintln!("Error opening file {}: {}", path.display(), e);
+                    eprintln!("error reading the file: {}", e);
                     return Err(rustyline::error::ReadlineError::Io(e));
                 }
             }
         }
+        else
+        {
+            0
+        };
+
         let history = self.editor.history();
+        let history_len = history.len();
+
+        let new_entries_to_write = history_len.saturating_sub(lines_in_file);
+        if new_entries_to_write == 0
+        {
+            return Ok(());
+        }
 
         match OpenOptions::new().write(true).create(true).truncate(false).append(true).open(&path) {
             Ok(mut file) => {
-                for entry in history {
-                    if existing_entries.contains(entry) {
-                        continue;
-                    }
+                for entry in history.iter().take(new_entries_to_write) {
 
                     if entry.starts_with("#") {
                         continue;
