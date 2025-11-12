@@ -42,6 +42,7 @@ impl Shell {
 
         // Use set_history_ignore_dups(true) to force the simple history format (no #V2 header).
         rl.set_history_ignore_dups(true); 
+        rl.set_history_ignore_space(true);
 
         // Load history from HOME directory if it exists
         if let Some(path) = Self::history_path() {
@@ -58,7 +59,26 @@ impl Shell {
         env::var("HOME").ok().map(|home| PathBuf::from(home).join(HISTORY_FILENAME))
     }
     fn save_history(&mut self, path: &PathBuf) -> Result<()> {
-        self.editor.save_history(path)
+
+        let history = self.editor.history();
+        
+        match OpenOptions::new().write(true).create(true).truncate(true).open(&path) {
+            Ok(mut file) => {
+                for entry in history {
+                    if entry.starts_with("#") {
+                        continue;
+                    }
+                    if let Err(e) = writeln!(file, "{}\nexi", entry) {
+                        eprintln!("Error writing to file {}: {}", path.display(), e);
+                    }
+                }
+                Ok(())
+            }
+            Err(e) => {
+                eprintln!("Error opening file {}: {}", path.display(), e);
+                Err(rustyline::error::ReadlineError::Io(e))
+            }
+        }
     }
 
     fn save_history_default(&mut self) -> Result<()> {
