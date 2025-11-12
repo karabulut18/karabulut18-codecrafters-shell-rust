@@ -58,8 +58,10 @@ impl Shell {
     fn history_path() -> Option<PathBuf> {
         env::var("HOME").ok().map(|home| PathBuf::from(home).join(HISTORY_FILENAME))
     }
+
     fn save_history(&mut self, path: &PathBuf) -> Result<()> {
 
+        print!("Saving history to {}...", path.display());
         let history = self.editor.history();
         
         match OpenOptions::new().write(true).create(true).truncate(true).open(&path) {
@@ -68,7 +70,7 @@ impl Shell {
                     if entry.starts_with("#") {
                         continue;
                     }
-                    if let Err(e) = writeln!(file, "{}\nexi", entry) {
+                    if let Err(e) = writeln!(file, "{}", entry) {
                         eprintln!("Error writing to file {}: {}", path.display(), e);
                     }
                 }
@@ -82,7 +84,7 @@ impl Shell {
     }
 
     fn save_history_default(&mut self) -> Result<()> {
-        self.save_history(&Self::history_path().unwrap())
+        Self::save_history(self, &Self::history_path().unwrap())
     }
 
 
@@ -98,7 +100,7 @@ impl Shell {
                     if !line.trim().is_empty() {
                         self.editor.add_history_entry(line.as_str());
                     }
-                    run_command(&mut self.editor, &line);
+                    run_command(self, &line);
                 },
                 Err(ReadlineError::Interrupted) => {
                     // Ctrl-C
@@ -370,7 +372,7 @@ fn arg_parse(line: &str) -> Vec<String> {
     return args
 }
 
-fn run_command(editor: &mut Editor<ShellHelper>, input: &str){
+fn run_command(shell: &mut Shell, input: &str){
 
     let commands: Vec<&str> = input.split('|').collect();
 
@@ -455,7 +457,7 @@ fn run_command(editor: &mut Editor<ShellHelper>, input: &str){
         // Pass the previous command's stdout as the current command's stdin.
         // Also, if it's not the last command, set up piping the current stdout.
         let new_prev_output = run_single_command(
-            editor,
+            shell,
             &command_args,
             prev_output.take(), // Take the previous output (it's now consumed as stdin)
             std_out_file.clone(), // Redirects for the current command
@@ -471,7 +473,7 @@ fn run_command(editor: &mut Editor<ShellHelper>, input: &str){
 
 
 fn run_single_command(
-    editor: &mut Editor<ShellHelper>,
+    shell: &mut Shell,
     command_args: &[String],
     stdin_pipe: Option<std::process::ChildStdout>, // The stdin for this command
     std_out_file: Option<String>,
@@ -539,7 +541,7 @@ fn run_single_command(
                         {
                             if let Some(file_path_str) = parts.get(1) {
                                 let file_path = PathBuf::from(file_path_str);
-                                let _ = editor.load_history(&file_path);
+                                let _ = shell.editor.load_history(&file_path);
                                 return None;
                             } else {
                                 std_err_s = "history: option requires an argument -- 'r'\nhistory: usage: history [-r] [filename]\n".to_string();
@@ -549,7 +551,7 @@ fn run_single_command(
                         {
                             if let Some(file_path_str) = parts.get(1) {
                                 let file_path = PathBuf::from(file_path_str);
-                                let _ = editor.save_history(&file_path);
+                                let _ = shell.save_history(&file_path);
                                 return None;
                             } else {
                                 std_err_s = "history: option requires an argument -- 'r'\nhistory: usage: history [-r] [filename]\n".to_string();
@@ -566,7 +568,7 @@ fn run_single_command(
                         }
                     }
 
-                    let history = editor.history();
+                    let history = shell.editor.history();
                     if !history.is_empty()
                     {
                         let start_index = history.len().saturating_sub(limit);
@@ -615,7 +617,6 @@ fn run_single_command(
                     }
                     "exit" =>
                     {
-    
                         if let Some(arg) = parts.get(0)
                         {
                             if let Ok(exit_code) = arg.parse::<i32>()
