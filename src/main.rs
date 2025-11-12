@@ -4,9 +4,6 @@ use std::env;
 use std::path::PathBuf;
 use std::os::unix::fs::PermissionsExt;
 use std::fs::OpenOptions;
-use std::sync::Mutex;
-
-use lazy_static::lazy_static;
 use rustyline::config::Configurer;
 use rustyline::config::{CompletionType, Config, BellStyle};
 use rustyline::error::ReadlineError;
@@ -18,11 +15,20 @@ use rustyline::validate::Validator;
 use rustyline::{Result, Context, Helper};
 
 const BUILTINS: &[&str] = &["echo", "exit", "type", "pwd", "cd", "history"];
+const HISTORY_FILENAME: &str = ".sh_history";
 
-lazy_static! {
-    static ref HISTORY_PATH: Option<PathBuf> = env::var("HOME").ok().map(|home| PathBuf::from(home).join(".sh_history"));
-    static ref RL: Mutex<Editor<ShellHelper>> = {
-        let config = Config::builder().completion_type(CompletionType::List).bell_style(BellStyle::Audible).build();
+pub struct Shell{
+    editor: Editor<ShellHelper>
+}
+
+impl Shell {
+    /// Initializes the shell configuration, loads history, and prepares the rustyline editor.
+    pub fn new() -> Self {
+        let config = Config::builder()
+            .completion_type(CompletionType::List)
+            .bell_style(BellStyle::Audible)
+            .build();
+        
         let mut all_commands = get_executables_in_path();
         for builtin in BUILTINS {
             if !all_commands.contains(&builtin.to_string()) {
@@ -30,20 +36,69 @@ lazy_static! {
             }
         }
         let helper = ShellHelper { all_commands };
+        
         let mut rl = Editor::<ShellHelper>::with_config(config).unwrap();
         rl.set_helper(Some(helper));
-        rl.set_history_ignore_space(true); 
 
+        // Use set_history_ignore_dups(true) to force the simple history format (no #V2 header).
+        rl.set_history_ignore_dups(true); 
 
-
-        if let Some(ref path) = *HISTORY_PATH {
+        // Load history from HOME directory if it exists
+        if let Some(path) = Self::history_path() {
             if path.exists() {
                 // Ignore errors on load, e.g., new or corrupt file
-                let _ = rl.load_history(path);
+                let _ = rl.load_history(&path);
             }
         }
-        Mutex::new(rl)
-    };
+
+        Shell { editor: rl }
+    }
+            /// Gets the default history file path in the user's home directory.
+    fn history_path() -> Option<PathBuf> {
+        env::var("HOME").ok().map(|home| PathBuf::from(home).join(HISTORY_FILENAME))
+    }
+    fn save_history(&mut self, path: &PathBuf) -> Result<()> {
+        self.editor.save_history(path)
+    }
+
+    fn save_history_default(&mut self) -> Result<()> {
+        self.save_history(&Self::history_path().unwrap())
+    }
+
+
+    fn run(&mut self) -> std::result::Result<(), Box<dyn std::error::Error>> 
+    {
+        let prompt = "$ ";
+        loop
+        {
+            let readline = self.editor.readline(prompt);
+            match readline {
+                Ok(line) => {
+                    // Add non-empty commands to history
+                    if !line.trim().is_empty() {
+                        self.editor.add_history_entry(line.as_str());
+                    }
+                    run_command(&mut self.editor, &line);
+                },
+                Err(ReadlineError::Interrupted) => {
+                    // Ctrl-C
+                    continue;
+                },
+                Err(ReadlineError::Eof) => {
+                    // Ctrl-D
+                    println!("exit");
+                    self.save_history_default()?;
+                    break;
+                },
+                Err(err) => {
+                    eprintln!("Error: {:?}", err);
+                    break;
+                }
+            }
+        }
+        Ok(())
+    }
+
 }
 
 
@@ -295,7 +350,7 @@ fn arg_parse(line: &str) -> Vec<String> {
     return args
 }
 
-fn run_command(input: &str){
+fn run_command(editor: &mut Editor<ShellHelper>, input: &str){
 
     let commands: Vec<&str> = input.split('|').collect();
 
@@ -380,6 +435,7 @@ fn run_command(input: &str){
         // Pass the previous command's stdout as the current command's stdin.
         // Also, if it's not the last command, set up piping the current stdout.
         let new_prev_output = run_single_command(
+            editor,
             &command_args,
             prev_output.take(), // Take the previous output (it's now consumed as stdin)
             std_out_file.clone(), // Redirects for the current command
@@ -395,6 +451,7 @@ fn run_command(input: &str){
 
 
 fn run_single_command(
+    editor: &mut Editor<ShellHelper>,
     command_args: &[String],
     stdin_pipe: Option<std::process::ChildStdout>, // The stdin for this command
     std_out_file: Option<String>,
@@ -462,8 +519,7 @@ fn run_single_command(
                         {
                             if let Some(file_path_str) = parts.get(1) {
                                 let file_path = PathBuf::from(file_path_str);
-                                let mut rl = RL.lock().unwrap();
-                                let _ = rl.load_history(&file_path);
+                                let _ = editor.load_history(&file_path);
                                 return None;
                             } else {
                                 std_err_s = "history: option requires an argument -- 'r'\nhistory: usage: history [-r] [filename]\n".to_string();
@@ -473,8 +529,7 @@ fn run_single_command(
                         {
                             if let Some(file_path_str) = parts.get(1) {
                                 let file_path = PathBuf::from(file_path_str);
-                                let mut rl = RL.lock().unwrap();
-                                let _ = rl.save_history(&file_path);
+                                let _ = editor.save_history(&file_path);
                                 return None;
                             } else {
                                 std_err_s = "history: option requires an argument -- 'r'\nhistory: usage: history [-r] [filename]\n".to_string();
@@ -491,8 +546,7 @@ fn run_single_command(
                         }
                     }
 
-                    let rl = RL.lock().unwrap();
-                    let history = rl.history();
+                    let history = editor.history();
                     if !history.is_empty()
                     {
                         let start_index = history.len().saturating_sub(limit);
@@ -541,12 +595,6 @@ fn run_single_command(
                     }
                     "exit" =>
                     {
-                        let mut rl = RL.lock().unwrap();
-                        if let Some(path) = &*HISTORY_PATH {
-                            if let Err(e) = rl.save_history(path) {
-                                eprintln!("Error writing history: {}", e);
-                            }
-                        };
     
                         if let Some(arg) = parts.get(0)
                         {
@@ -688,42 +736,7 @@ fn execute_piped(
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> 
 {
-    let prompt = "$ ";
-    loop
-    {
-        let mut rl = RL.lock().unwrap();
-        let readline = rl.readline(prompt);
-        match readline {
-            Ok(line) => {
-                // Add non-empty commands to history
-                if !line.trim().is_empty() {
-                    rl.add_history_entry(line.as_str());
-                }
-                // Release the lock before executing the command to prevent deadlocks
-                drop(rl);
-
-                run_command(&line);
-            },
-            Err(ReadlineError::Interrupted) => {
-                // Ctrl-C
-                continue;
-            },
-            Err(ReadlineError::Eof) => {
-                // Ctrl-D
-                println!("exit");
-                let mut rl = RL.lock().unwrap();
-                if let Some(ref path) = *HISTORY_PATH {
-                    if let Err(why) = rl.save_history(path) {
-                        eprintln!("Error writing history: {}", why);
-                    }
-                }
-                break;
-            },
-            Err(err) => {
-                eprintln!("Error: {:?}", err);
-                break;
-            }
-        }
-    }
+    let mut shell = Shell::new();
+    shell.run()?;
     Ok(())
 }
