@@ -119,10 +119,14 @@ impl Shell {
             return Ok(());
         }
 
+        let start_index = lines_in_file;
+
         match OpenOptions::new().write(true).create(true).truncate(false).append(true).open(&path) {
             Ok(mut file) => {
-                for entry in history.iter().take(new_entries_to_write) {
-
+                for (i,entry) in history.iter().enumerate(){
+                    if i < start_index {
+                        continue;
+                    }
                     if entry.starts_with("#") {
                         continue;
                     }
