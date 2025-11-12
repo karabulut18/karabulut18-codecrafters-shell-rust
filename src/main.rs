@@ -124,9 +124,7 @@ impl Shell {
             // History file size matches the in-memory history size, nothing to do.
             return Ok(());
         }
-    
-        let mut new_entries_written = 0;
-    
+        
         // 2. Open the file in **append mode**.
         match OpenOptions::new()
             .write(true)
@@ -143,7 +141,6 @@ impl Shell {
                         // Return error if writing fails
                         return Err(ReadlineError::Io(e)); 
                     }
-                    new_entries_written += 1;
                 }
                 
                 // Optional logging to confirm success
