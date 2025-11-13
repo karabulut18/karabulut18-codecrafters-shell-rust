@@ -677,6 +677,7 @@ fn run_single_command(
                     }
                     "exit" =>
                     {
+                        let _ =shell.save_history_default();
                         if let Some(arg) = parts.get(0)
                         {
                             if let Ok(exit_code) = arg.parse::<i32>()
