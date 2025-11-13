@@ -635,7 +635,7 @@ fn run_single_command(
                         std_out_s = history.iter()
                                     .skip(start_index)
                                     .enumerate()
-                                    .map(|(i, entry)| format!("{} {}", start_index + i + 1, entry))
+                                    .map(|(i, entry)| format!("{} {}", start_index + i , entry))
                                     .collect::<Vec<String>>()
                                     .join("\n");
                         std_out_s.push('\n');
