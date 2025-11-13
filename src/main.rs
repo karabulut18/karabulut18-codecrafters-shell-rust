@@ -1,9 +1,8 @@
-use std::arch::aarch64::uint32x2_t;
 use std::io::{Write};
 use std::collections::HashMap;
 use std::env;
 
-use std::path::{Path, PathBuf};
+use std::path::{PathBuf};
 use std::os::unix::fs::PermissionsExt;
 use std::fs::OpenOptions;
 use rustyline::config::Configurer;
