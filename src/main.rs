@@ -41,7 +41,10 @@ impl Shell {
         let mut rl = Editor::<ShellHelper>::with_config(config).unwrap();
         rl.set_helper(Some(helper));
 
-        let _ = rl.load_history(&Self::default_history_path().unwrap());
+        if let Some(path) = Self::default_history_path()
+        {
+            let _ = rl.load_history(&path);
+        }
 
         // Use set_history_ignore_dups(true) to force the simple history format (no #V2 header).
         rl.set_history_ignore_dups(true); 
@@ -51,7 +54,13 @@ impl Shell {
     }
             /// Gets the default history file path in the user's home directory.
     fn default_history_path() -> Option<PathBuf> {
-        env::var("HISTFILE").ok().map(|path| PathBuf::from(path))
+        if let Ok(path) = env::var("HISTFILE") {
+            if !path.is_empty() {
+                return Some(PathBuf::from(path));
+            }
+        }
+
+        return None
     }
 
     fn save_history(&mut self, path: &PathBuf) -> Result<()> {
