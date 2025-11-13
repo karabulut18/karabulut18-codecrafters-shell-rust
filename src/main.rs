@@ -78,7 +78,6 @@ impl Shell {
     }
 
     fn append_history(&mut self, path: &PathBuf) -> Result<()> {
-        let _ = self.editor.load_history(path);
         let history = self.editor.history();
 
         let mut start_index = 0;
