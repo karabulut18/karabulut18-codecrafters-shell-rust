@@ -135,7 +135,11 @@ impl Shell {
     }
 
     fn save_history_default(&mut self) -> Result<()> {
-        Self::save_history(self, &Self::default_history_path().unwrap())
+        if let Some(path) = Self::default_history_path()
+        {
+            let _ =self.save_history(&path);
+        }
+        Ok(())
     }
 
 
