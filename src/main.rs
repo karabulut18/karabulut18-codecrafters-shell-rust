@@ -23,7 +23,7 @@ const HISTORY_FILENAME: &str = ".sh_history";
 
 pub struct Shell{
     editor: Editor<ShellHelper>,
-    history_append_files: HashMap<PathBuf, u32>
+    history_append_files: HashMap<PathBuf, usize>
 }
 
 impl Shell {
@@ -84,7 +84,7 @@ impl Shell {
 
         let mut start_index = 0;
         if self.history_append_files.contains_key(path) {
-            start_index = *self.history_append_files.get(path).unwrap() as usize;
+            start_index = *self.history_append_files.get(path).unwrap();
         }
         
         // 2. Open the file in **append mode**.
@@ -114,6 +114,8 @@ impl Shell {
                         return Err(ReadlineError::Io(e)); 
                     }
                 }
+
+                self.history_append_files.insert(path.to_owned(), history.len());
                 
                 // Optional logging to confirm success
                 Ok(())
