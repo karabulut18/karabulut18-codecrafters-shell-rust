@@ -23,7 +23,7 @@ pub struct Shell{
 }
 
 impl Shell {
-    /// Initializes the shell configuration, loads history, and prepares the rustyline editor.
+
     pub fn new() -> Self {
         let config = Config::builder()
             .completion_type(CompletionType::List)
@@ -46,13 +46,12 @@ impl Shell {
             let _ = rl.load_history(&path);
         }
 
-        // Use set_history_ignore_dups(true) to force the simple history format (no #V2 header).
         rl.set_history_ignore_dups(true); 
         rl.set_history_ignore_space(true);
         
         Shell { editor: rl, history_append_files: HashMap::new() }
     }
-            /// Gets the default history file path in the user's home directory.
+
     fn default_history_path() -> Option<PathBuf> {
         if let Ok(path) = env::var("HISTFILE") {
             if !path.is_empty() {
@@ -142,7 +141,6 @@ impl Shell {
         Ok(())
     }
 
-
     fn run(&mut self) -> std::result::Result<(), Box<dyn std::error::Error>> 
     {
         let prompt = "$ ";
@@ -184,11 +182,9 @@ struct ShellHelper{
     all_commands: Vec<String>
 }
 
-// 2. Implement the Completer trait
 impl Completer for ShellHelper {
     type Candidate = CompletionPair;
     fn complete(&self, line: &str, pos: usize, _ctx: &Context<'_>) -> Result<(usize, Vec<CompletionPair>)> {
-        // Find the starting position of the word currently being typed
 
         let start = line[..pos]
             .rfind(|c: char| c.is_whitespace())
@@ -196,7 +192,6 @@ impl Completer for ShellHelper {
         
         let prefix = &line[start..pos];
 
-        // Filter BUILTINS based on the current prefix
         let mut candidates: Vec<CompletionPair> = self.all_commands
             .iter()
             .filter(|cmd| cmd.starts_with(prefix))
@@ -222,20 +217,13 @@ impl Validator for ShellHelper {}
 
 fn find_executable_in_path(name: &str) -> Option<PathBuf>
 {
-    // Improvement: Use `ok().and_then()` for more idiomatic Option/Result handling
     env::var("PATH").ok().and_then(|path_var| {
         for path in env::split_paths(&path_var)
         {
             let full_path = path.join(name);
-            
-            // 1. Check if the path points to a file
             if full_path.is_file()
             {
-                // 2. Check if we have execute permission
                 if let Ok(metadata) = full_path.metadata() {
-                    // This checks if the executable bit is set for the current user.
-                    // The standard mode constant for execute permission for the owner is 0o100.
-                    // This is a simple, common way to check for execution permission.
                     if metadata.permissions().mode() & 0o111 != 0 {
                         return Some(full_path);
                     }
@@ -246,7 +234,6 @@ fn find_executable_in_path(name: &str) -> Option<PathBuf>
     })
 }
 
-// Check if a file at a given path is executable by the current user
 fn is_executable(path: &PathBuf) -> bool {
     if path.is_file() {
         if let Ok(metadata) = path.metadata() {
@@ -261,22 +248,16 @@ fn is_executable(path: &PathBuf) -> bool {
 fn get_executables_in_path() -> Vec<String> {
     let mut executables = Vec::new();
     
-    // Attempt to get the PATH environment variable
     if let Ok(path_var) = env::var("PATH") {
         
-        // Iterate over all directories in PATH
         for path_dir in env::split_paths(&path_var) {
             
-            // Check if the path is a directory we can read
             if let Ok(entries) = std::fs::read_dir(&path_dir) {
                 
-                // Iterate over every item in the directory
                 for entry in entries.filter_map(|e| e.ok()) {
                     let path = entry.path();
                     
-                    // Check if the file is executable
                     if is_executable(&path) {
-                        // We only care about the file name for autocompletion
                         if let Some(file_name) = path.file_name().and_then(|name| name.to_str()) {
                             executables.push(file_name.to_string());
                         }
@@ -289,16 +270,12 @@ fn get_executables_in_path() -> Vec<String> {
 }
 
 
-// Helper to handle output for built-in commands (echo, pwd, type)
 fn handle_built_in_output(std_out_s: &str, std_out: Option<String>, std_out_append: bool, std_err_s: &str, std_err: Option<String>, std_err_append: bool) {
 
     if let Some(file_path) = std_out {
-        // Use OpenOptions to open the file, truncating it if it exists (for the '>' operator)
-        // if std_out_append is true, append the output
 
         match OpenOptions::new().write(true).append(std_out_append).create(true).truncate(!std_out_append).open(&file_path) {
             Ok(mut file) => {
-                // Write the output string and a newline in one operation
                 if !std_out_s.is_empty() && write!(file, "{}", std_out_s).is_err() {
                     eprintln!("Error writing to file {}", file_path);
                 }
@@ -308,7 +285,6 @@ fn handle_built_in_output(std_out_s: &str, std_out: Option<String>, std_out_appe
             }
         }
     } else {
-        // No redirection, print to standard output
         if !std_out_s.is_empty() {
             print!("{}", std_out_s);
         }
@@ -317,7 +293,6 @@ fn handle_built_in_output(std_out_s: &str, std_out: Option<String>, std_out_appe
     if let Some(file_path) = std_err {
         match OpenOptions::new().write(true).append(std_err_append).create(true).truncate(!std_err_append).open(&file_path) {
             Ok(mut file) => {
-                // Write the error string and a newline in one operation
                 if !std_err_s.is_empty()
                 {
                     if let Err(e) = write!(file, "{}", std_err_s) {
@@ -330,14 +305,12 @@ fn handle_built_in_output(std_out_s: &str, std_out: Option<String>, std_out_appe
             }
         }
     } else {
-        // No redirection, print to standard error
         if !std_err_s.is_empty()
         {
             eprint!("{}", std_err_s);
         }
     }
 }
-
 
 fn change_directory(path: &str)
 {
@@ -376,8 +349,6 @@ fn arg_parse(line: &str) -> Vec<String> {
                 }
                 else
                 {
-                    // this backslash does not escape the character
-                    // both added
                     current_arg.push('\\');
                     current_arg.push(c);
                 }
@@ -455,17 +426,14 @@ fn run_command(shell: &mut Shell, input: &str){
         {
             let arg = &raw_args[i];
     
-            // This block correctly identifies the redirection and consumes the token AND the filename
-            if arg == ">>" || arg == "1>>" || arg == "2>>" // Check for all redirection tokens
+            if arg == ">>" || arg == "1>>" || arg == "2>>"
             {
-                i += 1; // Move past the redirection operator
+                i += 1;
                 if i >= raw_args.len() {
                     error_in_parsing = true;                   
                     break;
                 }
-                
-                // **CRITICAL:** Here you consume the filename, but you DO NOT push the filename
-                // or the '>>' token to 'command_args'.
+
                 if arg == "2>>" {
                      std_err_r_append = true;
                      std_err_file = Some(raw_args[i].clone());
@@ -474,11 +442,11 @@ fn run_command(shell: &mut Shell, input: &str){
                      std_out_file = Some(raw_args[i].clone());
                 }
         
-                i += 1; // Move past the filename for the NEXT loop iteration
+                i += 1;
             }
-            else if arg == ">" || arg == "1>" || arg == "2>" // Check for all redirection tokens
+            else if arg == ">" || arg == "1>" || arg == "2>"
             {
-                i += 1; // Move past the redirection operator
+                i += 1;
                 if i >= raw_args.len() {
                     error_in_parsing = true;                   
                     break;
@@ -490,11 +458,10 @@ fn run_command(shell: &mut Shell, input: &str){
                     std_out_file = Some(raw_args[i].clone());
                     std_out_r_append = false;
                 }
-                i += 1; // Move past the filename for the NEXT loop iteration
+                i += 1;
             }
             else
             {
-                // This is a normal command argument, so it is added.
                 command_args.push(arg.clone());
                 i += 1;
             }
@@ -506,16 +473,14 @@ fn run_command(shell: &mut Shell, input: &str){
             return;
         }
 
-        // ... (Execute logic) ...
         let is_last = ith_command == commands.len() - 1;
         
-        // Pass the previous command's stdout as the current command's stdin.
-        // Also, if it's not the last command, set up piping the current stdout.
+
         let new_prev_output = run_single_command(
             shell,
             &command_args,
-            prev_output.take(), // Take the previous output (it's now consumed as stdin)
-            std_out_file.clone(), // Redirects for the current command
+            prev_output.take(),
+            std_out_file.clone(),
             std_out_r_append,
             std_err_file.clone(),
             std_err_r_append,
@@ -551,7 +516,6 @@ fn run_single_command(
                 {
                     std_out_s = format!("{}\n", parts.join(" "));
                     std_err_s = "".to_string();
-                    //handle_built_in_output(&std_out_s, std_out_file,std_out_r_append, std_err_s, std_err_file, std_err_r_append);
                 }
                 "pwd" =>
                 {
@@ -559,13 +523,11 @@ fn run_single_command(
                     {
                         std_out_s = format!("{}\n", current_dir.to_str().unwrap());
                         std_err_s = "".to_string();
-                        //handle_built_in_output(&std_out_s, std_out_file, std_out_r_append, "", std_err_file, std_err_r_append);
                     }
                     else
                     {
                         std_err_s = "Failed to get current directory\n".to_string();
                         std_out_s = "".to_string();
-                        //handle_built_in_output("", std_out_file, std_out_r_append, std_err_s,std_err_file, std_err_r_append);
                     }
                 }
                 "type" =>
@@ -721,7 +683,6 @@ fn run_single_command(
     }
 }
 
-// The execution function is updated to handle pipes
 fn execute_piped(
     command: &str, 
     args: &[&str], 
@@ -730,7 +691,7 @@ fn execute_piped(
     std_out_append: bool, 
     std_err: Option<String>, 
     std_err_append: bool,
-    create_pipe: bool, // True if output should be piped to the next command
+    create_pipe: bool,
 ) -> Option<std::process::ChildStdout>
 {
     if find_executable_in_path(command).is_none() {
@@ -741,19 +702,14 @@ fn execute_piped(
     let mut process_command = std::process::Command::new(command);
     process_command.args(args);
     
-    // --- STDIN Handling (The Pipe Input) ---
     if let Some(pipe) = stdin_pipe.take() {
-        // Set the current command's stdin to the previous command's stdout
         process_command.stdin(pipe);
     }
 
-    // --- STDOUT Handling (The Pipe Output or File Redirect) ---
     let mut pipe_output = None;
     if create_pipe {
-        // If we need to pipe, use Stdio::piped() to capture the output
         process_command.stdout(std::process::Stdio::piped());
     } else if let Some(output_file) = std_out {
-        // Otherwise, if there is a file redirect, handle that (as you did before)
         match std::fs::OpenOptions::new()
             .write(true)
             .append(std_out_append)
@@ -771,9 +727,7 @@ fn execute_piped(
             }
     }
 
-    // --- STDERR Handling (File Redirect Only) ---
     if let Some(error_file) = std_err {
-        // (Your existing error redirection logic)
         match std::fs::OpenOptions::new()
             .write(true)
             .append(std_err_append)
