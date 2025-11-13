@@ -15,10 +15,7 @@ use rustyline::hint::Hinter;
 use rustyline::validate::Validator;
 use rustyline::{Result, Context, Helper};
 
-
-
 const BUILTINS: &[&str] = &["echo", "exit", "type", "pwd", "cd", "history"];
-const HISTORY_FILENAME: &str = ".sh_history";
 
 pub struct Shell{
     editor: Editor<ShellHelper>,
@@ -44,6 +41,8 @@ impl Shell {
         let mut rl = Editor::<ShellHelper>::with_config(config).unwrap();
         rl.set_helper(Some(helper));
 
+        let _ = rl.load_history(&Self::default_history_path().unwrap());
+
         // Use set_history_ignore_dups(true) to force the simple history format (no #V2 header).
         rl.set_history_ignore_dups(true); 
         rl.set_history_ignore_space(true);
@@ -51,8 +50,8 @@ impl Shell {
         Shell { editor: rl, history_append_files: HashMap::new() }
     }
             /// Gets the default history file path in the user's home directory.
-    fn history_path() -> Option<PathBuf> {
-        env::var("HOME").ok().map(|home| PathBuf::from(home).join(HISTORY_FILENAME))
+    fn default_history_path() -> Option<PathBuf> {
+        env::var("HISTFILE").ok().map(|path| PathBuf::from(path))
     }
 
     fn save_history(&mut self, path: &PathBuf) -> Result<()> {
@@ -125,8 +124,9 @@ impl Shell {
             }
         }
     }
+
     fn save_history_default(&mut self) -> Result<()> {
-        Self::save_history(self, &Self::history_path().unwrap())
+        Self::save_history(self, &Self::default_history_path().unwrap())
     }
 
 
