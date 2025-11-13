@@ -1,7 +1,9 @@
+use std::arch::aarch64::uint32x2_t;
 use std::io::{Write};
+use std::collections::HashMap;
 use std::env;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::os::unix::fs::PermissionsExt;
 use std::fs::OpenOptions;
 use rustyline::config::Configurer;
@@ -15,11 +17,13 @@ use rustyline::validate::Validator;
 use rustyline::{Result, Context, Helper};
 
 
+
 const BUILTINS: &[&str] = &["echo", "exit", "type", "pwd", "cd", "history"];
 const HISTORY_FILENAME: &str = ".sh_history";
 
 pub struct Shell{
-    editor: Editor<ShellHelper>
+    editor: Editor<ShellHelper>,
+    history_append_files: HashMap<PathBuf, u32>
 }
 
 impl Shell {
@@ -44,18 +48,8 @@ impl Shell {
         // Use set_history_ignore_dups(true) to force the simple history format (no #V2 header).
         rl.set_history_ignore_dups(true); 
         rl.set_history_ignore_space(true);
-
-        /*For now do not load the history 
-        // Load history from HOME directory if it exists
-        if let Some(path) = Self::history_path() {
-            if path.exists() {
-                // Ignore errors on load, e.g., new or corrupt file
-                let _ = rl.load_history(&path);
-            }
-        }
-        */
         
-        Shell { editor: rl }
+        Shell { editor: rl, history_append_files: HashMap::new() }
     }
             /// Gets the default history file path in the user's home directory.
     fn history_path() -> Option<PathBuf> {
@@ -87,6 +81,11 @@ impl Shell {
     fn append_history(&mut self, path: &PathBuf) -> Result<()> {
         let _ = self.editor.load_history(path);
         let history = self.editor.history();
+
+        let mut start_index = 0;
+        if self.history_append_files.contains_key(path) {
+            start_index = *self.history_append_files.get(path).unwrap() as usize;
+        }
         
         // 2. Open the file in **append mode**.
         match OpenOptions::new()
@@ -98,7 +97,17 @@ impl Shell {
             Ok(mut file) => {
                 // 3. Iterate over in-memory history, skipping the entries already present in the file.
                 // This is the idiomatic way to achieve the check: if i >= start_index
-                for entry in history.iter(){
+                for (i, entry) in history.iter().enumerate(){
+
+                    if i < start_index
+                    {
+                        continue;
+                    }
+
+                    if entry.starts_with("#") {
+                        continue;
+                    }
+
                     if let Err(e) = writeln!(file, "{}", entry) {
                         eprintln!("Error writing to history file {}: {}", path.display(), e);
                         // Return error if writing fails
